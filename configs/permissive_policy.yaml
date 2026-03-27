@@ -1,0 +1,29 @@
+# Permissive policy — allows most operations within /workspace.
+# Use this for trusted agents in sandboxed environments.
+
+capabilities:
+  # Full filesystem access under /workspace
+  - action: fs.read
+    resource: /workspace/**
+  - action: fs.write
+    resource: /workspace/**
+  - action: fs.delete
+    resource: /workspace/**
+
+  # Process execution for common tools
+  - action: proc.exec
+    resource: git
+  - action: proc.exec
+    resource: python
+  - action: proc.exec
+    resource: pip
+  - action: proc.exec
+    resource: uv
+
+  # HTTP access to any HTTPS endpoint
+  - action: net.http
+    resource: https://**
+
+  # MCP tool calls
+  - action: mcp.call
+    resource: "*/search"

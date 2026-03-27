@@ -1,0 +1,26 @@
+# Example policy for the Agent OS Kernel
+# This policy defines what actions an agent is allowed to perform.
+# Default deny: any action not listed here is blocked.
+
+capabilities:
+  # Filesystem: read anything under /workspace
+  - action: fs.read
+    resource: /workspace/**
+
+  # Filesystem: write only to output directory
+  - action: fs.write
+    resource: /workspace/output/**
+
+  # Filesystem: delete only from output directory
+  - action: fs.delete
+    resource: /workspace/output/**
+
+  # Process: only git commands
+  - action: proc.exec
+    resource: git
+
+  # HTTP: GET-only to specific API
+  - action: net.http
+    resource: https://api.example.com/**
+    constraint:
+      method: GET

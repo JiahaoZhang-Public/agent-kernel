@@ -13,7 +13,7 @@ import json
 from collections.abc import Callable
 from typing import Any
 
-from agents import Agent, FunctionTool, RunConfig, Runner  # type: ignore[import-not-found]
+from agents import Agent, FunctionTool, RunConfig, Runner
 
 from agent_os_kernel.kernel import Kernel
 from agent_os_kernel.models import ActionRequest
@@ -55,7 +55,9 @@ def kernel_tool(
         tool_name = name or func.__name__
         tool_desc = description or func.__doc__ or ""
 
-        async def wrapper(ctx: Any, **kwargs: Any) -> str:  # noqa: ARG001
+        async def wrapper(ctx: Any, args: str) -> str:  # noqa: ARG001
+            kwargs: dict[str, Any] = json.loads(args) if args else {}
+
             # Determine target
             if target_from is None:
                 target = tool_name
@@ -121,7 +123,7 @@ def create_kernel_agent(
         name=name,
         instructions=instructions,
         model=model,
-        tools=tools or [],
+        tools=list(tools) if tools else [],
     )
 
 
