@@ -222,15 +222,15 @@ class KernelToolManager(ToolManager):
 
 ## Recommendation
 
-For the v2 kernel (single agent, open source, naive loop):
+> **Update (v0.4.0):** We chose to build a kernel-native agent loop instead of integrating with any external framework. The reason: wrapping an SDK's execution path cannot structurally guarantee "all access through Gate." By owning the loop, `kernel.submit()` is the sole execution path — not a hook, not a decorator, not a wrapper. LiteLLM handles LLM routing (100+ providers).
 
-1. **Start with OpenAI Agents SDK.** It is the closest match to the v2 design's assumptions. The loop is a literal while loop with a single tool execution point. Integration is ~50 lines of modification. Use LiteLLM underneath if non-OpenAI models are needed.
+The survey above remains useful as reference for understanding the agent framework landscape. Key takeaways that informed the kernel-native decision:
 
-2. **Keep Google ADK as the alternative.** If the callback-based approach (Pattern B) is preferred over forking, ADK's `before_tool_callback` is purpose-built for this. No source modification required.
+1. **No framework provides a mandatory tool interception point.** All surveyed frameworks offer hooks or callbacks, but none prevent bypass at the architecture level.
 
-3. **Evaluate Pydantic AI if type safety matters.** The `ToolManager` interception aligns well with the kernel's validation step, and Pydantic's argument validation complements the kernel's policy checking.
+2. **A minimal agent loop is ~80 lines.** The complexity of external frameworks is not justified when the kernel already handles authorization, execution, and logging.
 
-4. **Use smolagents for code-agent research.** If the agent needs to write and execute analysis code (rather than calling tools via JSON), smolagents' AST-based executor is the right model.
+3. **LiteLLM decouples LLM routing from agent orchestration.** This avoids vendor lock-in while keeping the loop simple.
 
 ## References
 
