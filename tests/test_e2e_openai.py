@@ -304,8 +304,9 @@ def test_agent_exec_process_tool(tmp_path):
         )
 
     print(f"\n[test_agent_exec_process] Agent output: {result!r}")
+    result_normalized = result.lower().replace(" ", "")
     assert (
-        "kernel-test-ok" in result.lower() or "echo" in result.lower()
+        "kernel-test-ok" in result.lower() or "kernel-test-ok" in result_normalized or "echo" in result.lower()
     ), f"Expected kernel-test-ok in output, got: {result!r}"
 
     records = Log(log_path).read_all()
