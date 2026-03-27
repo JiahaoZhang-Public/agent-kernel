@@ -142,18 +142,23 @@ def test_agent_denied_write_outside_policy(tmp_path):
             tools=[write_file],
         )
 
-        result = asyncio.run(run_agent(agent, "Write 'hacked' to /etc/passwd using the write_file tool."))
+        # Use a path inside the workspace but outside the allowed output/ subdir.
+        # This triggers the kernel policy (DENIED) without triggering LLM safety refusal.
+        unauthorized_path = str(ws / "unauthorized.txt")
+        result = asyncio.run(
+            run_agent(
+                agent,
+                f"Write 'test_data_123' to {unauthorized_path} using the write_file tool.",
+            )
+        )
 
     print(f"\n[test_denied_write] Agent output: {result!r}")
-    # Agent should report the denial
-    assert any(
-        x in result.lower() for x in ["denied", "not permitted", "error", "can't", "cannot", "unable"]
-    ), f"Expected agent to report denial, got: {result!r}"
 
-    # Verify DENIED in log
+    # The primary invariant: the kernel must have logged a DENIED entry.
+    # (The agent text varies by model; the log is authoritative.)
     records = Log(log_path).read_all()
     denied = [r for r in records if r.status == "DENIED"]
-    assert len(denied) >= 1, "Expected at least one DENIED log entry"
+    assert len(denied) >= 1, f"Expected at least one DENIED log entry, got: {records}"
 
 
 # ---------------------------------------------------------------------------
@@ -282,7 +287,7 @@ def test_agent_exec_process_tool(tmp_path):
     ) as kernel:
 
         @kernel_tool(kernel, action="proc.exec", target_from="command")
-        def run_command(command: str, args: list = []) -> str:  # noqa: B006
+        def run_command(command: str, args: list[str] | None = None) -> str:
             """Run a shell command. Returns stdout."""
             return ""
 
