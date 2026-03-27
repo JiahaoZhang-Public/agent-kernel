@@ -1,5 +1,43 @@
 # Changelog
 
+## v0.3.0 (2026-03-27)
+
+### Added
+
+- **Live E2E OpenAI API Tests** (`tests/test_e2e_openai.py`) — 5 tests validating the full agent-kernel workflow against a real LLM:
+  - Agent reads file through kernel-gated `kernel_tool`
+  - Policy blocks unauthorized writes (DENIED logged)
+  - Multi-tool read → write workflow
+  - Invariant: every LLM tool call produces a log entry
+  - Process exec tool through kernel
+- **Real MCP Server Integration Tests** (`tests/test_mcp_real.py`) — 15 tests using a self-contained Python stdio MCP server (no external deps):
+  - `McpClient` connect/initialize, `tools/list`, `tools/call` (echo, add)
+  - Error propagation (`isError=True`, unknown tool, JSON-RPC errors)
+  - Multiple calls on same connection, close/reconnect
+  - `McpProvider` through Kernel Gate with policy enforcement
+- **Performance & Load Benchmarks** (`scripts/perf_test.py`) — 6 benchmarks with ops/sec and p50/p95/p99 latency reporting:
+  - Sequential throughput: 77,048 ops/s (deny-only), 29,526 ops/s (fs.read with provider)
+  - Concurrent load: 10 threads × 100 ops with log integrity verification
+  - Mixed allow/deny stress: 1,000 ops with correctness assertion
+  - Write throughput: 200 file creates
+- **Full E2E Demo Script** (`scripts/e2e_agent_demo.py`) — end-to-end walkthrough:
+  - Agent reads CSV sales data and writes analysis report
+  - Simulates accidental overwrite + reversible layer rollback
+  - Prints full audit log summary
+
+### Fixed
+
+- **`test_agent_denied_write_outside_policy`**: test was prompting agent to write to `/etc/passwd` which triggered LLM safety refusal without calling the tool; switched to an in-workspace but policy-excluded path and asserts on the kernel log (the authoritative invariant) rather than LLM text
+- **`test_agent_exec_process_tool`**: `args: list` produced JSON schema without `items`, rejected by OpenAI API with 400; changed to `args: list[str] | None = None`
+- **Assertion normalization**: handle space-separated output from LLM echo responses
+
+### Validated on Real Server (`gpuhub-root-rtx4090-48`)
+
+- All 5 live OpenAI API tests pass (model: gpt-5.4-mini via api.openai-proxy.org)
+- All 15 real MCP server integration tests pass
+- All 6 performance benchmarks complete with zero errors
+- Full E2E demo runs end-to-end: agent writes report, rollback restores file, audit log complete
+
 ## v0.2.0 (2026-03-27)
 
 ### Added
