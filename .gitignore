@@ -1,0 +1,67 @@
+CLAUDE.md
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# uv
+.python-version
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Testing / Coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# mypy
+.mypy_cache/
+
+# Docs build
+docs/site/
+
+# ML artifacts — large files, do NOT commit
+data/
+outputs/
+checkpoints/
+wandb/
+mlruns/
+lightning_logs/
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.bin
+*.h5
+*.onnx
+
+# Datasets (often large)
+*.tar.gz
+*.zip
+
+# Environment & secrets
+.env
+.env.*
+*.key
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
