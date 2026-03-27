@@ -1,0 +1,20 @@
+capabilities:
+  - action: fs.read
+    resource: /workspace/**
+
+  - action: fs.write
+    resource: /workspace/output/**
+
+  - action: fs.delete
+    resource: /workspace/output/**
+
+  - action: proc.exec
+    resource: git
+
+  - action: mcp.call
+    resource: scholar/search
+
+  - action: net.http
+    resource: https://api.example.com/**
+    constraint:
+      method: GET

@@ -9,8 +9,8 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/<USER>/agent-os-kernel.git
-cd agent-os-kernel
+git clone https://github.com/JiahaoZhang-Public/agent-kernel.git
+cd agent-kernel
 
 # Install all dependencies (including dev, test, docs)
 uv sync --all-extras
