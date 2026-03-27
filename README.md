@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/JiahaoZhang-Public/agent-kernel/actions/workflows/ci.yml/badge.svg)](https://github.com/JiahaoZhang-Public/agent-kernel/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/badge/coverage-96%25-brightgreen)](https://github.com/JiahaoZhang-Public/agent-kernel)
-[![PyPI](https://img.shields.io/badge/version-0.3.0-blue)](https://github.com/JiahaoZhang-Public/agent-kernel/releases)
+[![PyPI](https://img.shields.io/badge/version-0.4.0-blue)](https://github.com/JiahaoZhang-Public/agent-kernel/releases)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -45,7 +45,7 @@ Agent (LLM)
 - **Append-only audit log** — tamper-evident JSONL; every `submit()` call is recorded with status, duration, and error
 - **Reversible Action Layer** — snapshot-and-rollback for write operations; safety net between "permitted" and "intended"
 - **Pluggable providers** — filesystem, process, HTTP, MCP (Model Context Protocol) out of the box
-- **OpenAI Agents SDK integration** — `@kernel_tool` decorator and `create_kernel_agent()` helper; drop-in for any agent
+- **Kernel-native agent loop** — `AgentLoop` + `ToolDef` with `kernel.submit()` as the sole execution path; LiteLLM for 100+ LLM providers
 - **CLI** — `python -m agent_os_kernel submit | log | validate-policy | version`
 - **High throughput** — 77,000+ ops/s, p99 < 0.1 ms (measured on real hardware)
 
@@ -77,33 +77,41 @@ with Kernel(policy=policy, providers=[FilesystemProvider()], log_path="kernel.lo
 
 ---
 
-## Agent Integration (OpenAI Agents SDK)
+## Agent Loop
+
+`AgentLoop` makes `kernel.submit()` the **sole execution path** — no decorator, no wrapper, no opt-in. Tool definitions are pure metadata (`ToolDef`); they contain no execution logic.
 
 ```python
 import asyncio
-from agent_os_kernel.agent_loop import kernel_tool, create_kernel_agent, run_agent
+from agent_os_kernel import Kernel, AgentLoop, ToolDef
 
-@kernel_tool(kernel, action="fs.read", target_from="path")
-def read_file(path: str) -> str:
-    """Read the contents of a file."""
-    return ""
+read_file = ToolDef(
+    name="read_file",
+    description="Read a file",
+    parameters={"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]},
+    action="fs.read",
+    target_from="path",
+)
 
-@kernel_tool(kernel, action="fs.write", target_from="path")
-def write_file(path: str, content: str = "") -> str:
-    """Write content to a file."""
-    return ""
+write_file = ToolDef(
+    name="write_file",
+    description="Write a file",
+    parameters={"type": "object", "properties": {"path": {"type": "string"}, "content": {"type": "string"}}, "required": ["path", "content"]},
+    action="fs.write",
+    target_from="path",
+)
 
-agent = create_kernel_agent(
-    kernel,
-    name="AnalysisAgent",
+loop = AgentLoop(
+    kernel=kernel,
+    model="gpt-4o",  # or "anthropic/claude-sonnet-4-20250514", "ollama/llama3", etc.
     instructions="You are a data analyst. Read CSVs and write reports.",
     tools=[read_file, write_file],
 )
 
-result = asyncio.run(run_agent(agent, "Read /workspace/sales.csv and write a summary to /workspace/output/report.txt"))
+result = asyncio.run(loop.run("Read /workspace/sales.csv and write a summary to /workspace/output/report.txt"))
 ```
 
-Every tool call the agent makes routes through the kernel Gate — authorized, logged, and bounded by policy.
+Every tool call routes through `kernel.submit()` — authorized, logged, and bounded by policy. There is no code path that bypasses the Gate.
 
 ---
 
@@ -268,7 +276,7 @@ src/agent_os_kernel/
 ├── log.py             # Append-only JSONL audit log
 ├── models.py          # ActionRequest, ActionResult, Record
 ├── reversible.py      # Reversible Action Layer (v2.1)
-├── agent_loop.py      # OpenAI Agents SDK integration
+├── agent_loop.py      # Kernel-native agent loop (ToolDef + AgentLoop)
 ├── config.py          # Config loader
 ├── __main__.py        # CLI entry point
 └── providers/
@@ -292,8 +300,9 @@ docs/
 - [x] v0.1 — Core kernel: Gate, Policy, Log, Providers, Reversible Layer
 - [x] v0.2 — MCP provider, CLI, 96% test coverage
 - [x] v0.3 — Live E2E tests, real MCP integration tests, performance benchmarks
-- [ ] v0.4 — Budget / rate limiting layer
-- [ ] v0.5 — Human-in-the-loop approval gate
+- [x] v0.4 — Kernel-native agent loop (all access through Gate enforced structurally)
+- [ ] v0.5 — Budget / rate limiting layer
+- [ ] v0.6 — Human-in-the-loop approval gate
 - [ ] v1.0 — Stable API, full documentation, production hardening
 
 ---

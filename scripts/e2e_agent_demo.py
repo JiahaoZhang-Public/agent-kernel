@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""End-to-end agent demo with live OpenAI API.
+"""End-to-end agent demo with live LLM API via LiteLLM.
 
 Demonstrates a real agent workflow:
-1. Agent reads CSV data through kernel-gated tool
+1. Agent reads CSV data through kernel-native AgentLoop
 2. Agent computes statistics and writes report
 3. Agent rollbacks accidental overwrite via reversible layer
 4. All actions authorized and logged by the kernel
 
 Usage:
-    OPENAI_API_KEY=sk-... OPENAI_BASE_URL=https://api.openai-proxy.org/v1 \\
+    OPENAI_API_KEY=sk-... OPENAI_BASE_URL=https://api.openai-proxy.org/v1 \
     OPENAI_MODEL=gpt-5.4-mini python scripts/e2e_agent_demo.py
 """
 
@@ -19,8 +19,9 @@ import os
 import tempfile
 from pathlib import Path
 
-from agent_os_kernel import ActionRequest, Kernel
-from agent_os_kernel.agent_loop import create_kernel_agent, kernel_tool, run_agent
+import litellm
+
+from agent_os_kernel import ActionRequest, AgentLoop, Kernel, ToolDef
 from agent_os_kernel.log import Log
 from agent_os_kernel.policy import CapabilityRule, Policy
 from agent_os_kernel.providers.filesystem import FilesystemProvider
@@ -40,6 +41,10 @@ async def run_demo(workspace: Path, log_path: str, snapshot_dir: str) -> None:
     print(f"Base URL: {BASE_URL}")
     print(f"Workspace: {workspace}")
     print()
+
+    # Configure LiteLLM proxy
+    if BASE_URL:
+        litellm.api_base = BASE_URL
 
     # Write sample data
     (workspace / "output").mkdir(exist_ok=True)
@@ -75,40 +80,55 @@ async def run_demo(workspace: Path, log_path: str, snapshot_dir: str) -> None:
         store=store,
     )
 
+    # --- Tool definitions (pure data, no execution logic) ---
+    read_file = ToolDef(
+        name="read_file",
+        description="Read the contents of a file at the given path.",
+        parameters={
+            "type": "object",
+            "properties": {"path": {"type": "string", "description": "Full file path"}},
+            "required": ["path"],
+        },
+        action="fs.read",
+        target_from="path",
+    )
+
+    write_file = ToolDef(
+        name="write_file",
+        description="Write content to a file at the given path.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Full file path"},
+                "content": {"type": "string", "description": "Content to write"},
+            },
+            "required": ["path", "content"],
+        },
+        action="fs.write",
+        target_from="path",
+    )
+
     # --- Step 1: Agent reads and analyzes data ---
     print("=" * 60)
     print("STEP 1: Agent reads sales data and writes analysis report")
     print("=" * 60)
 
-    @kernel_tool(kernel, action="fs.read", target_from="path")
-    def read_file(path: str) -> str:
-        """Read the contents of a file at the given path."""
-        return ""
-
-    @kernel_tool(kernel, action="fs.write", target_from="path")
-    def write_file(path: str, content: str = "") -> str:
-        """Write content to a file at the given path."""
-        return ""
-
-    agent = create_kernel_agent(
-        kernel,
-        name="SalesAnalysisAgent",
+    loop = AgentLoop(
+        kernel=kernel,
+        model=MODEL,
         instructions=(
             "You are a business analyst. "
             "Read CSV files, analyze sales data, and write concise reports. "
             "Always use the tools provided — do not invent data."
         ),
-        model=MODEL,
         tools=[read_file, write_file],
     )
 
     report_path = str(workspace / "output" / "report.txt")
-    result = await run_agent(
-        agent,
+    result = await loop.run(
         f"Read the sales data at {workspace}/sales.csv. "
         f"Calculate total revenue per product and overall, then write a 3-line summary "
         f"report to {report_path}.",
-        model=MODEL,
     )
     print(f"Agent response: {result}")
     print(f"\nReport file contents:\n{(workspace / 'output' / 'report.txt').read_text()}")
@@ -118,7 +138,6 @@ async def run_demo(workspace: Path, log_path: str, snapshot_dir: str) -> None:
     print("STEP 2: Simulate accidental overwrite, then rollback")
     print("=" * 60)
 
-    # Agent "accidentally" overwrites the report
     overwrite_result = layer.submit(
         ActionRequest(
             action="fs.write",
@@ -129,7 +148,6 @@ async def run_demo(workspace: Path, log_path: str, snapshot_dir: str) -> None:
     print(f"Accidental write: status={overwrite_result.status}, record_id={overwrite_result.record_id}")
     print(f"File now: {(workspace / 'output' / 'report.txt').read_text()!r}")
 
-    # Rollback
     if overwrite_result.record_id:
         rollback_result = layer.rollback(overwrite_result.record_id)
         print(f"Rollback: status={rollback_result.status}")
@@ -145,10 +163,10 @@ async def run_demo(workspace: Path, log_path: str, snapshot_dir: str) -> None:
     print(f"Total log entries: {len(records)}")
     for r in records:
         dur = f" ({r.duration_ms}ms)" if r.duration_ms is not None else ""
-        err = f" ← {r.error}" if r.error else ""
-        print(f"  [{r.status}] {r.action} → {r.target[:60]}{dur}{err}")
+        err = f" <- {r.error}" if r.error else ""
+        print(f"  [{r.status}] {r.action} -> {r.target[:60]}{dur}{err}")
 
-    print(f"\n✅ Demo complete. {len(records)} actions recorded.")
+    print(f"\nDemo complete. {len(records)} actions recorded.")
 
 
 def main() -> None:

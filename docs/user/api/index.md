@@ -76,19 +76,19 @@
 
 ::: agent_os_kernel.reversible.SnapshotStore
 
-## Agent Integration
+## Agent Loop
 
-### kernel_tool
+### ToolDef
 
-::: agent_os_kernel.agent_loop.kernel_tool
+::: agent_os_kernel.agent_loop.ToolDef
 
-### create_kernel_agent
+### AgentLoop
 
-::: agent_os_kernel.agent_loop.create_kernel_agent
+::: agent_os_kernel.agent_loop.AgentLoop
 
-### run_agent
+### run_agent_loop
 
-::: agent_os_kernel.agent_loop.run_agent
+::: agent_os_kernel.agent_loop.run_agent_loop
 
 ## CLI
 

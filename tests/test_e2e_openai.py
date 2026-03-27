@@ -1,8 +1,7 @@
-"""End-to-end tests using the live OpenAI API via proxy.
+"""End-to-end tests using a live LLM API via LiteLLM.
 
-These tests validate the full agent-kernel workflow:
-  - OpenAI Agents SDK integration
-  - kernel_tool routing through the Gate
+These tests validate the full kernel-native agent loop workflow:
+  - AgentLoop + ToolDef routing through the Gate
   - Policy enforcement on live LLM-generated actions
   - Audit log completeness
 
@@ -19,10 +18,8 @@ import os
 from pathlib import Path
 
 import pytest
-from agents.models.openai_provider import OpenAIProvider
 
-from agent_os_kernel import Kernel
-from agent_os_kernel.agent_loop import create_kernel_agent, kernel_tool, run_agent
+from agent_os_kernel import AgentLoop, Kernel, ToolDef
 from agent_os_kernel.log import Log
 from agent_os_kernel.providers.filesystem import FilesystemProvider
 from agent_os_kernel.providers.process import ProcessProvider
@@ -38,8 +35,12 @@ MODEL = os.environ.get("OPENAI_MODEL", "gpt-5.4-mini")
 SKIP_IF_NO_KEY = pytest.mark.skipif(not API_KEY, reason="OPENAI_API_KEY not set")
 
 
-def _make_provider() -> OpenAIProvider:
-    return OpenAIProvider(api_key=API_KEY, base_url=BASE_URL)
+def _setup_litellm():
+    """Configure LiteLLM to use the proxy."""
+    import litellm
+
+    if BASE_URL:
+        litellm.api_base = BASE_URL
 
 
 def _make_workspace(tmp_path: Path) -> tuple[Path, str, str]:
@@ -62,6 +63,54 @@ def _make_workspace(tmp_path: Path) -> tuple[Path, str, str]:
     return ws, str(policy_file), str(log_path)
 
 
+def _read_file_tool(ws: Path) -> ToolDef:
+    return ToolDef(
+        name="read_file",
+        description="Read the contents of a file. Pass the full file path.",
+        parameters={
+            "type": "object",
+            "properties": {"path": {"type": "string", "description": "Full file path to read"}},
+            "required": ["path"],
+        },
+        action="fs.read",
+        target_from="path",
+    )
+
+
+def _write_file_tool() -> ToolDef:
+    return ToolDef(
+        name="write_file",
+        description="Write content to a file. Returns bytes written.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Full file path to write"},
+                "content": {"type": "string", "description": "Content to write"},
+            },
+            "required": ["path", "content"],
+        },
+        action="fs.write",
+        target_from="path",
+    )
+
+
+def _run_command_tool() -> ToolDef:
+    return ToolDef(
+        name="run_command",
+        description="Run a shell command. Pass the command string.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "command": {"type": "string", "description": "Command to run"},
+                "args": {"type": "string", "description": "Arguments string"},
+            },
+            "required": ["command"],
+        },
+        action="proc.exec",
+        target_from="command",
+    )
+
+
 # ---------------------------------------------------------------------------
 # Test 1: Basic file read tool
 # ---------------------------------------------------------------------------
@@ -69,9 +118,9 @@ def _make_workspace(tmp_path: Path) -> tuple[Path, str, str]:
 
 @SKIP_IF_NO_KEY
 def test_agent_reads_file_through_kernel(tmp_path):
-    """Agent should read a file via kernel_tool and report its contents."""
+    """Agent should read a file via kernel and report its contents."""
+    _setup_litellm()
     ws, policy_path, log_path = _make_workspace(tmp_path)
-
     (ws / "output").mkdir()
 
     with Kernel(
@@ -79,31 +128,19 @@ def test_agent_reads_file_through_kernel(tmp_path):
         providers=[FilesystemProvider()],
         log_path=log_path,
     ) as kernel:
-
-        @kernel_tool(kernel, action="fs.read", target_from="path")
-        def read_file(path: str) -> str:
-            """Read the contents of a file."""
-            return ""
-
-        agent = create_kernel_agent(
-            kernel,
-            name="FileReaderAgent",
-            instructions="You are a helpful assistant. When asked to read a file, use the read_file tool.",
+        loop = AgentLoop(
+            kernel=kernel,
             model=MODEL,
-            tools=[read_file],
+            instructions="You are a helpful assistant. When asked to read a file, use the read_file tool.",
+            tools=[_read_file_tool(ws)],
         )
-
-        result = asyncio.run(
-            run_agent(agent, f"Read the file at {ws}/data.csv and tell me the highest score."),
-        )
+        result = asyncio.run(loop.run(f"Read the file at {ws}/data.csv and tell me the highest score."))
 
     print(f"\n[test_agent_reads_file] Agent output: {result!r}")
-    # The agent should mention either 92 or carol
     assert any(
         x in result.lower() for x in ["92", "carol"]
     ), f"Expected score 92 or name 'carol' in agent output, got: {result!r}"
 
-    # Verify the kernel logged the fs.read action
     records = Log(log_path).read_all()
     read_records = [r for r in records if r.action == "fs.read" and r.status == "OK"]
     assert len(read_records) >= 1, "Expected at least one fs.read OK log entry"
@@ -117,6 +154,7 @@ def test_agent_reads_file_through_kernel(tmp_path):
 @SKIP_IF_NO_KEY
 def test_agent_denied_write_outside_policy(tmp_path):
     """Agent attempting to write outside allowed path should get DENIED back."""
+    _setup_litellm()
     ws, policy_path, log_path = _make_workspace(tmp_path)
     (ws / "output").mkdir()
 
@@ -125,37 +163,20 @@ def test_agent_denied_write_outside_policy(tmp_path):
         providers=[FilesystemProvider()],
         log_path=log_path,
     ) as kernel:
-
-        @kernel_tool(kernel, action="fs.write", target_from="path")
-        def write_file(path: str, content: str = "") -> str:
-            """Write content to a file."""
-            return ""
-
-        agent = create_kernel_agent(
-            kernel,
-            name="WriteAgent",
+        loop = AgentLoop(
+            kernel=kernel,
+            model=MODEL,
             instructions=(
                 "You are an assistant. When asked to write a file, "
                 "use write_file. Report exactly what the tool returned."
             ),
-            model=MODEL,
-            tools=[write_file],
+            tools=[_write_file_tool()],
         )
-
-        # Use a path inside the workspace but outside the allowed output/ subdir.
-        # This triggers the kernel policy (DENIED) without triggering LLM safety refusal.
         unauthorized_path = str(ws / "unauthorized.txt")
-        result = asyncio.run(
-            run_agent(
-                agent,
-                f"Write 'test_data_123' to {unauthorized_path} using the write_file tool.",
-            )
-        )
+        result = asyncio.run(loop.run(f"Write 'test_data_123' to {unauthorized_path} using the write_file tool."))
 
     print(f"\n[test_denied_write] Agent output: {result!r}")
 
-    # The primary invariant: the kernel must have logged a DENIED entry.
-    # (The agent text varies by model; the log is authoritative.)
     records = Log(log_path).read_all()
     denied = [r for r in records if r.status == "DENIED"]
     assert len(denied) >= 1, f"Expected at least one DENIED log entry, got: {records}"
@@ -169,6 +190,7 @@ def test_agent_denied_write_outside_policy(tmp_path):
 @SKIP_IF_NO_KEY
 def test_agent_read_then_write_workflow(tmp_path):
     """Agent reads a CSV, summarizes it, writes summary to output file."""
+    _setup_litellm()
     ws, policy_path, log_path = _make_workspace(tmp_path)
     out_dir = ws / "output"
     out_dir.mkdir()
@@ -178,47 +200,31 @@ def test_agent_read_then_write_workflow(tmp_path):
         providers=[FilesystemProvider()],
         log_path=log_path,
     ) as kernel:
-
-        @kernel_tool(kernel, action="fs.read", target_from="path")
-        def read_file(path: str) -> str:
-            """Read the contents of a file."""
-            return ""
-
-        @kernel_tool(kernel, action="fs.write", target_from="path")
-        def write_file(path: str, content: str = "") -> str:
-            """Write content to a file. Returns bytes written."""
-            return ""
-
-        agent = create_kernel_agent(
-            kernel,
-            name="SummaryAgent",
+        loop = AgentLoop(
+            kernel=kernel,
+            model=MODEL,
             instructions=(
                 "You are a data assistant. "
                 "Read the CSV file requested, compute the average score, "
                 "then write a one-line summary to the output path specified."
             ),
-            model=MODEL,
-            tools=[read_file, write_file],
+            tools=[_read_file_tool(ws), _write_file_tool()],
         )
-
         out_path = str(out_dir / "summary.txt")
         result = asyncio.run(
-            run_agent(
-                agent,
+            loop.run(
                 f"Read {ws}/data.csv, compute the average score, " f"and write a one-line summary to {out_path}.",
             )
         )
 
     print(f"\n[test_read_write_workflow] Agent output: {result!r}")
 
-    # Verify the output file was created
     summary_file = out_dir / "summary.txt"
     assert summary_file.exists(), "Agent should have written the summary file"
     content = summary_file.read_text()
     print(f"[test_read_write_workflow] Summary file: {content!r}")
     assert len(content) > 0, "Summary file should not be empty"
 
-    # Verify log has both read and write entries
     records = Log(log_path).read_all()
     actions = {r.action for r in records if r.status == "OK"}
     assert "fs.read" in actions, "Expected fs.read in log"
@@ -232,11 +238,11 @@ def test_agent_read_then_write_workflow(tmp_path):
 
 @SKIP_IF_NO_KEY
 def test_every_tool_call_logged(tmp_path):
-    """Fundamental invariant: every tool invocation through kernel_tool is logged."""
+    """Fundamental invariant: every tool invocation is logged."""
+    _setup_litellm()
     ws, policy_path, log_path = _make_workspace(tmp_path)
     (ws / "output").mkdir()
 
-    # Write several readable files
     for i in range(3):
         (ws / f"file{i}.txt").write_text(f"content {i}")
 
@@ -245,28 +251,19 @@ def test_every_tool_call_logged(tmp_path):
         providers=[FilesystemProvider()],
         log_path=log_path,
     ) as kernel:
-
-        @kernel_tool(kernel, action="fs.read", target_from="path")
-        def read_file(path: str) -> str:
-            """Read the contents of a file."""
-            return ""
-
-        agent = create_kernel_agent(
-            kernel,
-            name="MultiReadAgent",
-            instructions="You are helpful. Read all files you are asked about.",
+        loop = AgentLoop(
+            kernel=kernel,
             model=MODEL,
-            tools=[read_file],
+            instructions="You are helpful. Read all files you are asked about.",
+            tools=[_read_file_tool(ws)],
         )
-
         files = [str(ws / f"file{i}.txt") for i in range(3)]
         prompt = f"Read these files one by one and tell me all their contents: {', '.join(files)}"
-        asyncio.run(run_agent(agent, prompt))
+        asyncio.run(loop.run(prompt))
 
     records = Log(log_path).read_all()
     read_ok = [r for r in records if r.action == "fs.read" and r.status == "OK"]
     print(f"\n[test_every_tool_call_logged] Log entries: {len(records)}, reads: {len(read_ok)}")
-    # The agent should have read at least 2 of the 3 files
     assert len(read_ok) >= 2, f"Expected at least 2 logged reads, got {len(read_ok)}"
 
 
@@ -278,6 +275,7 @@ def test_every_tool_call_logged(tmp_path):
 @SKIP_IF_NO_KEY
 def test_agent_exec_process_tool(tmp_path):
     """Agent can invoke process tools through the kernel."""
+    _setup_litellm()
     ws, policy_path, log_path = _make_workspace(tmp_path)
 
     with Kernel(
@@ -285,23 +283,13 @@ def test_agent_exec_process_tool(tmp_path):
         providers=[ProcessProvider()],
         log_path=log_path,
     ) as kernel:
-
-        @kernel_tool(kernel, action="proc.exec", target_from="command")
-        def run_command(command: str, args: list[str] | None = None) -> str:
-            """Run a shell command. Returns stdout."""
-            return ""
-
-        agent = create_kernel_agent(
-            kernel,
-            name="ShellAgent",
-            instructions="You can run shell commands. Use run_command.",
+        loop = AgentLoop(
+            kernel=kernel,
             model=MODEL,
-            tools=[run_command],
+            instructions="You can run shell commands. Use run_command.",
+            tools=[_run_command_tool()],
         )
-
-        result = asyncio.run(
-            run_agent(agent, "Run the echo command with argument 'kernel-test-ok' and tell me the output.")
-        )
+        result = asyncio.run(loop.run("Run the echo command with argument 'kernel-test-ok' and tell me the output."))
 
     print(f"\n[test_agent_exec_process] Agent output: {result!r}")
     result_normalized = result.lower().replace(" ", "")

@@ -99,12 +99,13 @@ rollback_result = layer.rollback(result.record_id)
 print(rollback_result.status)  # "OK" — original content restored
 ```
 
-## OpenAI Agents SDK Integration
+## Agent Loop
+
+`AgentLoop` enforces that `kernel.submit()` is the **sole execution path**. `ToolDef` is pure metadata — it contains no execution logic.
 
 ```python
 import asyncio
-from agent_os_kernel import Kernel
-from agent_os_kernel.agent_loop import kernel_tool, create_kernel_agent, run_agent
+from agent_os_kernel import Kernel, AgentLoop, ToolDef
 from agent_os_kernel.providers.filesystem import FilesystemProvider
 
 kernel = Kernel(
@@ -112,19 +113,27 @@ kernel = Kernel(
     providers=[FilesystemProvider()],
 )
 
-# Define a kernel-gated tool
-@kernel_tool(kernel, action="fs.read", target_from="path")
-def read_file(path: str) -> str:
-    """Read a file from the workspace."""
-    return ""  # The kernel's FilesystemProvider handles actual execution
+# Define a tool (pure metadata — no execution logic)
+read_file = ToolDef(
+    name="read_file",
+    description="Read a file from the workspace.",
+    parameters={
+        "type": "object",
+        "properties": {"path": {"type": "string", "description": "File path"}},
+        "required": ["path"],
+    },
+    action="fs.read",
+    target_from="path",
+)
 
-# Create and run an agent
-agent = create_kernel_agent(
-    kernel,
+# Create and run an agent loop
+loop = AgentLoop(
+    kernel=kernel,
+    model="gpt-4o",  # any LiteLLM-supported model
     instructions="You are a helpful assistant with access to workspace files.",
     tools=[read_file],
 )
 
-output = asyncio.run(run_agent(agent, "Read the file /workspace/data.csv"))
+output = asyncio.run(loop.run("Read the file /workspace/data.csv"))
 print(output)
 ```

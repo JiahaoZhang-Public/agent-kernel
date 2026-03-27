@@ -1,197 +1,206 @@
-"""OpenAI Agents SDK integration for the Agent OS Kernel.
+"""Kernel-native agent loop.
 
-Per v2 design §1: the kernel replaces `execute(action)` with `kernel.submit(action)`.
-This module provides the integration layer between the OpenAI Agents SDK and the kernel.
+Per v2 design invariant #1: ALL access goes through the Gate.
+This module owns the agent loop and enforces that kernel.submit() is the
+sole tool execution path. ToolDefs are pure metadata — they contain no
+execution logic. AgentLoop converts LLM tool calls into ActionRequests
+and submits them through the kernel.
 
-Integration pattern: wrap each tool function so that calls route through kernel.submit().
-The agent sees normal tools, but every invocation passes through the Gate.
+LLM calls are routed through LiteLLM, supporting 100+ model providers.
 """
 
 from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from typing import Any
 
-from agents import Agent, FunctionTool, RunConfig, Runner
+import litellm
 
 from agent_os_kernel.kernel import Kernel
-from agent_os_kernel.models import ActionRequest
+from agent_os_kernel.models import ActionRequest, ActionResult
 
 
-def kernel_tool(
-    kernel: Kernel,
-    action: str,
-    *,
-    name: str | None = None,
-    description: str = "",
-    target_from: str | Callable[..., str] | None = None,
-) -> Callable[[Callable[..., Any]], FunctionTool]:
-    """Decorator that wraps a tool function with kernel authorization.
+@dataclass
+class ToolDef:
+    """Declares a tool the LLM can call. Contains NO execution logic.
 
-    The decorated function becomes a FunctionTool whose invocations
-    pass through kernel.submit() before the original function executes.
+    Execution is always handled by kernel.submit() -> provider.execute().
+    ToolDef only provides the metadata the LLM needs to generate tool calls
+    and the mapping rules to convert tool calls into ActionRequests.
 
-    Args:
-        kernel: The Kernel instance for authorization.
-        action: The action type for this tool, e.g. "mcp.call".
-        name: Override the tool name (defaults to function name).
-        description: Tool description for the LLM.
-        target_from: How to determine the target for the ActionRequest.
-            - If a string, uses that parameter name from the tool args.
-            - If a callable, calls it with the tool args dict.
-            - If None, uses the tool name as the target.
-
-    Returns:
-        A decorator that converts a function into a kernel-gated FunctionTool.
-
-    Example:
-        @kernel_tool(kernel, action="mcp.call", target_from="query")
-        def search_papers(query: str) -> str:
-            return mcp_client.call("scholar/search", query=query)
+    Attributes:
+        name: Tool name shown to the LLM.
+        description: Tool description shown to the LLM.
+        parameters: JSON Schema for tool parameters.
+        action: Kernel action type, e.g. "fs.read", "mcp.call".
+        target_from: How to extract the target for the ActionRequest.
+            If a string, uses that parameter name from the tool args.
+            If a callable, calls it with the args dict to produce the target.
     """
 
-    def decorator(func: Callable[..., Any]) -> FunctionTool:
-        tool_name = name or func.__name__
-        tool_desc = description or func.__doc__ or ""
+    name: str
+    description: str
+    parameters: dict[str, Any]
+    action: str
+    target_from: str | Callable[[dict[str, Any]], str] = field(default="target")
 
-        async def wrapper(ctx: Any, args: str) -> str:  # noqa: ARG001
-            kwargs: dict[str, Any] = json.loads(args) if args else {}
 
-            # Determine target
-            if target_from is None:
-                target = tool_name
-            elif isinstance(target_from, str):
-                target = str(kwargs.get(target_from, tool_name))
-            else:
-                target = target_from(kwargs)
+class AgentLoop:
+    """LLM agent loop where kernel.submit() is the sole execution path.
 
-            # Submit through kernel
-            request = ActionRequest(action=action, target=target, params=kwargs)
-            result = kernel.submit(request)
+    Invariant: there is no code path that executes a tool without going
+    through kernel.submit(). This is enforced structurally — ToolDefs
+    contain no execution logic, and this class only calls kernel.submit().
+    """
 
-            if result.status != "OK":
-                return json.dumps({"error": result.error, "status": result.status})
+    def __init__(
+        self,
+        kernel: Kernel,
+        model: str,
+        instructions: str = "",
+        tools: list[ToolDef] | None = None,
+        max_turns: int = 20,
+        submit: Callable[[ActionRequest], ActionResult] | None = None,
+    ) -> None:
+        """Initialize the agent loop.
 
-            # If the kernel executed a provider, return that result
-            if result.data is not None:
-                if isinstance(result.data, str):
-                    return result.data
-                return json.dumps(result.data)
+        Args:
+            kernel: The Kernel instance for authorization and execution.
+            model: LiteLLM model string, e.g. "gpt-4o", "anthropic/claude-sonnet-4-20250514".
+            instructions: System prompt for the LLM.
+            tools: List of ToolDefs available to the agent.
+            max_turns: Maximum LLM call iterations before stopping.
+            submit: Optional override for the submit callable. Defaults to
+                kernel.submit(). Use this for ReversibleActionLayer integration.
+        """
+        self.kernel = kernel
+        self.model = model
+        self.instructions = instructions
+        self.tools: dict[str, ToolDef] = {t.name: t for t in (tools or [])}
+        self.max_turns = max_turns
+        self._submit = submit or kernel.submit
 
-            # Otherwise, fall through to the original function
-            output = func(**kwargs)
-            if isinstance(output, str):
-                return output
-            return json.dumps(output)
+    async def run(self, prompt: str) -> str:
+        """Run the agent loop until completion or max_turns.
 
-        # Create the FunctionTool with proper schema
-        return FunctionTool(
-            name=tool_name,
-            description=tool_desc,
-            params_json_schema=_extract_schema(func),
-            on_invoke_tool=wrapper,
+        Args:
+            prompt: User input prompt.
+
+        Returns:
+            The agent's final text output.
+        """
+        messages: list[dict[str, Any]] = []
+        if self.instructions:
+            messages.append({"role": "system", "content": self.instructions})
+        messages.append({"role": "user", "content": prompt})
+
+        for _ in range(self.max_turns):
+            response = await litellm.acompletion(
+                model=self.model,
+                messages=messages,
+                tools=self._tool_schemas() if self.tools else None,
+                tool_choice="auto" if self.tools else None,
+            )
+            choice = response.choices[0]
+            message = choice.message
+
+            # Terminal: LLM produced final text
+            if choice.finish_reason == "stop":
+                return message.content or ""
+
+            # Tool calls: execute each through kernel
+            if message.tool_calls:
+                messages.append(message.model_dump())
+                for tc in message.tool_calls:
+                    result = self._execute_tool_call(tc)
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tc.id,
+                            "content": result,
+                        }
+                    )
+                continue
+
+            # Unexpected finish reason (e.g. length) — return whatever we have
+            return message.content or ""
+
+        return "[max turns reached]"
+
+    def _execute_tool_call(self, tool_call: Any) -> str:
+        """Convert a tool call to an ActionRequest and submit through kernel.
+
+        THIS IS THE ONLY EXECUTION PATH. There is no else branch,
+        no fallback, no direct function call. Every tool call becomes
+        a kernel.submit() call.
+        """
+        func = tool_call.function
+        tool_def = self.tools.get(func.name)
+
+        if tool_def is None:
+            return json.dumps({"error": f"unknown tool: {func.name}", "status": "ERROR"})
+
+        args: dict[str, Any] = json.loads(func.arguments) if func.arguments else {}
+
+        # Resolve target
+        if isinstance(tool_def.target_from, str):
+            target = str(args.get(tool_def.target_from, func.name))
+        else:
+            target = tool_def.target_from(args)
+
+        # Submit through kernel — the ONLY execution path
+        request = ActionRequest(action=tool_def.action, target=target, params=args)
+        result = self._submit(request)
+
+        return json.dumps(
+            {"status": result.status, "data": result.data, "error": result.error},
+            default=str,
         )
 
-    return decorator
+    def _tool_schemas(self) -> list[dict[str, Any]]:
+        """Convert ToolDefs to LiteLLM/OpenAI tool format."""
+        return [
+            {
+                "type": "function",
+                "function": {
+                    "name": td.name,
+                    "description": td.description,
+                    "parameters": td.parameters,
+                },
+            }
+            for td in self.tools.values()
+        ]
 
 
-def create_kernel_agent(
+async def run_agent_loop(
     kernel: Kernel,
+    model: str,
+    prompt: str,
     *,
-    name: str = "KernelAgent",
     instructions: str = "",
-    model: str = "gpt-4o",
-    tools: list[FunctionTool] | None = None,
-) -> Agent[Any]:
-    """Create an Agent wired to the kernel.
-
-    All tools provided should be created with @kernel_tool or manually
-    wrapped to route through kernel.submit().
+    tools: list[ToolDef] | None = None,
+    max_turns: int = 20,
+) -> str:
+    """Convenience function: create an AgentLoop and run it.
 
     Args:
         kernel: The Kernel instance.
-        name: Agent name.
-        instructions: System instructions for the agent.
-        model: Model identifier.
-        tools: List of kernel-wrapped FunctionTools.
-
-    Returns:
-        An Agent instance ready to run.
-    """
-    return Agent(
-        name=name,
-        instructions=instructions,
-        model=model,
-        tools=list(tools) if tools else [],
-    )
-
-
-async def run_agent(
-    agent: Agent[Any],
-    prompt: str,
-    *,
-    model: str | None = None,
-) -> str:
-    """Run an agent with a prompt and return the final output.
-
-    Args:
-        agent: The Agent to run.
+        model: LiteLLM model string.
         prompt: User input prompt.
-        model: Optional model override.
+        instructions: System prompt for the LLM.
+        tools: List of ToolDefs.
+        max_turns: Maximum LLM call iterations.
 
     Returns:
         The agent's final text output.
     """
-    config = RunConfig(model=model) if model else RunConfig()
-    result = await Runner.run(agent, input=prompt, run_config=config)
-    return str(result.final_output)
-
-
-def _extract_schema(func: Callable[..., Any]) -> dict[str, Any]:
-    """Extract a JSON schema from function type hints.
-
-    This is a simplified schema extractor for basic types.
-    For complex schemas, users should provide params_json_schema directly.
-    """
-    import inspect
-    import typing
-
-    sig = inspect.signature(func)
-    hints = typing.get_type_hints(func)
-    properties: dict[str, Any] = {}
-    required: list[str] = []
-
-    type_map = {
-        str: "string",
-        int: "integer",
-        float: "number",
-        bool: "boolean",
-        list: "array",
-        dict: "object",
-    }
-
-    for param_name, param in sig.parameters.items():
-        if param_name in ("self", "cls", "ctx"):
-            continue
-
-        annotation = hints.get(param_name, inspect.Parameter.empty)
-        if annotation is inspect.Parameter.empty:
-            json_type = "string"
-        else:
-            origin = getattr(annotation, "__origin__", None)
-            json_type = "string" if origin is not None else type_map.get(annotation, "string")
-
-        properties[param_name] = {"type": json_type}
-
-        if param.default is inspect.Parameter.empty:
-            required.append(param_name)
-
-    schema: dict[str, Any] = {
-        "type": "object",
-        "properties": properties,
-    }
-    if required:
-        schema["required"] = required
-
-    return schema
+    loop = AgentLoop(
+        kernel=kernel,
+        model=model,
+        instructions=instructions,
+        tools=tools,
+        max_turns=max_turns,
+    )
+    return await loop.run(prompt)

@@ -4,14 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent-os-kernel"
-version = "0.3.0"
+version = "0.4.0"
 description = "A Python AI/ML project"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"
 dependencies = [
     "pyyaml>=6.0",
-    "openai-agents>=0.13",
+    "litellm>=1.40",
 ]
 
 [project.optional-dependencies]

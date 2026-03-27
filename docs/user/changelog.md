@@ -1,5 +1,33 @@
 # Changelog
 
+## v0.4.0 (2026-03-27)
+
+### Breaking Changes
+
+- **Replaced OpenAI Agents SDK with kernel-native agent loop** — `@kernel_tool`, `create_kernel_agent()`, and `run_agent()` are removed. Use `ToolDef` + `AgentLoop` instead. See migration guide in `docs/research/plans/2026-03-27-kernel-native-agent-loop.md`.
+- **Dependency change** — `openai-agents>=0.13` replaced with `litellm>=1.40`
+
+### Added
+
+- **`AgentLoop`** — kernel-native agent loop where `kernel.submit()` is the **sole execution path**. No wrapper, no decorator, no opt-in. Structural enforcement of "all access through Gate" invariant.
+- **`ToolDef`** — declarative tool definitions containing only metadata (name, description, parameters, action, target mapping). Zero execution logic.
+- **`run_agent_loop()`** — convenience function for one-shot agent execution
+- **LiteLLM integration** — supports 100+ LLM providers (OpenAI, Anthropic, Ollama, etc.) via unified `litellm.acompletion()` interface
+- **Gate enforcement structural test** — AST-based verification that `AgentLoop._execute_tool_call` contains only `kernel.submit()` as execution path
+- **`submit` callable override** — `AgentLoop` accepts optional `submit` parameter for `ReversibleActionLayer` integration
+
+### Changed
+
+- **`agent_loop.py`** — complete rewrite from OpenAI Agents SDK wrapper to kernel-native implementation
+- **`__init__.py`** — exports updated: `AgentLoop`, `ToolDef`, `run_agent_loop` replace old SDK wrappers
+
+### Validated
+
+- 207 unit/integration tests passing, 96%+ coverage
+- 5 live E2E tests passing (gpt-5.4-mini via api.openai-proxy.org)
+- All 15 real MCP integration tests passing
+- All core kernel tests unchanged and passing
+
 ## v0.3.0 (2026-03-27)
 
 ### Added
