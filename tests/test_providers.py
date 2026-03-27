@@ -265,12 +265,12 @@ class TestHttpProvider:
 
 
 # ---------------------------------------------------------------------------
-# McpProvider
+# McpProvider — basic tests (comprehensive tests in test_mcp.py)
 # ---------------------------------------------------------------------------
 
 
-class TestMcpProvider:
-    """Tests for the McpProvider stub."""
+class TestMcpProviderBasic:
+    """Basic tests for the McpProvider."""
 
     def test_actions_list(self):
         provider = McpProvider()
@@ -282,14 +282,9 @@ class TestMcpProvider:
             provider.execute(ActionRequest(action="mcp.call", target="no_slash"))
 
     def test_unknown_server(self):
-        provider = McpProvider(servers={"known": {}})
+        provider = McpProvider(servers={"known": {"command": ["echo"]}})
         with pytest.raises(ValueError, match="Unknown MCP server"):
             provider.execute(ActionRequest(action="mcp.call", target="unknown/tool"))
-
-    def test_known_server_raises_not_implemented(self):
-        provider = McpProvider(servers={"scholar": {"url": "http://localhost"}})
-        with pytest.raises(NotImplementedError, match="MCP call"):
-            provider.execute(ActionRequest(action="mcp.call", target="scholar/search"))
 
     def test_default_empty_servers(self):
         provider = McpProvider()

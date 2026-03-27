@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent-os-kernel"
-version = "0.1.0"
+version = "0.2.0"
 description = "A Python AI/ML project"
 readme = "README.md"
 license = { text = "MIT" }
@@ -19,6 +19,7 @@ dev = [
     "ruff>=0.4",
     "mypy>=1.10",
     "pre-commit>=3.7",
+    "types-PyYAML>=6.0",
 ]
 test = [
     "pytest>=8.0",
@@ -50,6 +51,14 @@ warn_return_any = true
 warn_unused_configs = true
 packages = ["agent_os_kernel"]
 mypy_path = "src"
+
+[[tool.mypy.overrides]]
+module = ["numpy.*", "torch.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["agent_os_kernel.utils"]
+warn_unused_ignores = false
 
 [tool.coverage.run]
 source = ["src"]

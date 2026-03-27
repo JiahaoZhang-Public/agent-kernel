@@ -1,0 +1,6 @@
+# Restrictive policy — read-only filesystem access, no network, no process execution.
+# Use this as a starting point for untrusted agents.
+
+capabilities:
+  - action: fs.read
+    resource: /workspace/**
