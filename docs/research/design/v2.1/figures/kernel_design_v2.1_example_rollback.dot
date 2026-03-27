@@ -1,0 +1,128 @@
+digraph ExampleRollback {
+    graph [
+        rankdir=TB,
+        splines=polyline,
+        pad=0.5,
+        nodesep=0.35,
+        ranksep=0.45,
+        bgcolor="#fcfcfb",
+        fontname="Helvetica",
+        label="Example:  File Overwrite → User Notices → Rollback Restores",
+        labelloc=t,
+        fontsize=18,
+        fontcolor="#1e293b"
+    ];
+
+    node [
+        shape=box,
+        style="rounded,filled",
+        color="#334155",
+        penwidth=1.2,
+        fontname="Helvetica",
+        fontsize=11,
+        margin="0.16,0.10",
+        fillcolor="#ffffff"
+    ];
+
+    edge [
+        color="#475569",
+        penwidth=1.2,
+        arrowsize=0.65,
+        fontname="Helvetica",
+        fontsize=10
+    ];
+
+    /* ============================================================ */
+    /*  LEFT — Without Rollback Layer                               */
+    /* ============================================================ */
+    subgraph cluster_no_rollback {
+        label="Without Reversible Action Layer";
+        labeljust=l;
+        color="#fbbf24";
+        style="filled,rounded";
+        fillcolor="#fffbeb";
+        fontname="Helvetica-Bold";
+        fontsize=14;
+        fontcolor="#92400e";
+        margin=18;
+
+        n1 [label="User: \"Update the summary\nin report.md\"", fillcolor="#fef3c7", shape=note];
+        n2 [label="LLM generates:\nfs.write report.md\n(overwrites entire file)", fillcolor="#fffaf0", fontname="Courier", fontsize=10];
+        n3 [label="kernel.submit()\n→ Policy: fs.write /workspace/output/** ✓\n→ Gate allows", fillcolor="#eef7f3", fontsize=10];
+        n4 [label="File overwritten\nOriginal content lost", fillcolor="#fee2e2", color="#991b1b", penwidth=1.6];
+        n5 [label="User: \"Wait, that destroyed\nmy hand-edited sections!\"", fillcolor="#fef3c7", shape=note];
+        n6 [label="✗  No recovery possible\n• Action was authorized\n• Policy can't prevent this\n• Original content is gone", fillcolor="#fee2e2", fontsize=10, color="#991b1b", penwidth=1.6];
+
+        n1 -> n2;
+        n2 -> n3;
+        n3 -> n4;
+        n4 -> n5;
+        n5 -> n6 [style=dashed, color="#991b1b"];
+    }
+
+    /* ============================================================ */
+    /*  RIGHT — With Rollback Layer                                 */
+    /* ============================================================ */
+    subgraph cluster_with_rollback {
+        label="With Reversible Action Layer (v2.1)";
+        labeljust=l;
+        color="#22c55e";
+        style="filled,rounded";
+        fillcolor="#f0fdf4";
+        fontname="Helvetica-Bold";
+        fontsize=14;
+        fontcolor="#166534";
+        margin=18;
+
+        k1 [label="User: \"Update the summary\nin report.md\"", fillcolor="#dcfce7", shape=note];
+        k2 [label="LLM generates:\nfs.write report.md\n(overwrites entire file)", fillcolor="#f0fdf4", fontname="Courier", fontsize=10];
+
+        subgraph cluster_submit_phase {
+            label="layer.submit()";
+            color="#86efac";
+            style="filled,rounded";
+            fillcolor="#e2fee9";
+            fontname="Helvetica-Bold";
+            fontsize=11;
+            margin=14;
+
+            k3 [label="1. FsWriteSnapshotStrategy\n    captures original content", fillcolor="#ede5f5", fontsize=10];
+            k4 [label="2. kernel.submit(fs.write)\n    → authorized, executed, logged", fillcolor="#ffffff", fontsize=10];
+            k5 [label="3. store.save(record_id,\n    original content)", fillcolor="#ede5f5", fontsize=10];
+        }
+
+        k6 [label="File overwritten\n(snapshot preserved)", fillcolor="#fef3c7"];
+        k7 [label="User: \"Wait, that destroyed\nmy hand-edited sections!\"", fillcolor="#dcfce7", shape=note];
+
+        subgraph cluster_rollback_phase {
+            label="layer.rollback(record_id)";
+            color="#86efac";
+            style="filled,rounded";
+            fillcolor="#e2fee9";
+            fontname="Helvetica-Bold";
+            fontsize=11;
+            margin=14;
+
+            k8 [label="1. store.load(record_id)\n    → original content", fillcolor="#ede5f5", fontsize=10];
+            k9 [label="2. strategy.restore()\n    → build fs.write with\n       original content", fillcolor="#ede5f5", fontsize=10];
+            k10 [label="3. kernel.submit(fs.write)\n    → authorized, executed, logged", fillcolor="#ffffff", fontsize=10];
+        }
+
+        k11 [label="✓  File restored\n• Original content recovered\n• Restore was authorized by Policy\n• Both write + restore in audit log\n• Snapshot cleaned up", fillcolor="#dcfce7", fontsize=10, color="#166534", penwidth=1.6];
+
+        k1 -> k2;
+        k2 -> k3;
+        k3 -> k4;
+        k4 -> k5;
+        k5 -> k6;
+        k6 -> k7;
+        k7 -> k8;
+        k8 -> k9;
+        k9 -> k10;
+        k10 -> k11 [style=dashed, color="#166534"];
+    }
+
+    /* ── Layout alignment ── */
+    n1 -> k1 [style=invis];
+    n6 -> k11 [style=invis];
+}

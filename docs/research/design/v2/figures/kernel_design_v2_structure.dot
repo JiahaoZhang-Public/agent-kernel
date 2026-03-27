@@ -1,0 +1,115 @@
+digraph KernelDesignV2Structure {
+    graph [
+        rankdir=LR,
+        splines=polyline,
+        pad=0.4,
+        nodesep=0.6,
+        ranksep=1.0,
+        bgcolor="#fcfcfb",
+        fontname="Helvetica"
+    ];
+
+    node [
+        shape=box,
+        style="rounded,filled",
+        color="#334155",
+        penwidth=1.4,
+        fontname="Helvetica",
+        fontsize=14,
+        margin="0.22,0.14",
+        fillcolor="#ffffff"
+    ];
+
+    edge [
+        color="#475569",
+        penwidth=1.6,
+        arrowsize=0.8,
+        fontname="Helvetica",
+        fontsize=11
+    ];
+
+    /* ── Userland ── */
+    subgraph cluster_userland {
+        label="Userland";
+        labeljust=l;
+        color="#efe5d8";
+        style="filled,rounded";
+        fillcolor="#efe5d8";
+        fontname="Helvetica-Bold";
+        fontsize=16;
+        margin=22;
+
+        agent [label="Agent Loop\nobserve → think → act", fillcolor="#fffaf0"];
+    }
+
+    /* ── Kernel ── */
+    subgraph cluster_kernel {
+        label="Kernel v2";
+        labeljust=l;
+        color="#c6ddd2";
+        style="filled,rounded";
+        fillcolor="#dfeee8";
+        fontname="Helvetica-Bold";
+        fontsize=16;
+        margin=22;
+
+        gate [label="  Gate  \nsubmit(req) → result", fillcolor="#f0faf5", fontsize=13, penwidth=2, color="#166534"];
+        policy [label="Policy\nstatic allow-list", fillcolor="#eef7f3"];
+        log [label="Log\nappend-only JSONL", fillcolor="#eef7f3"];
+
+        /* internal layout */
+        { rank=same; policy; gate; log; }
+        policy -> gate [style=dashed, color="#64748b", penwidth=1.2, label="allow / deny", dir=back];
+        gate -> log [style=dashed, color="#64748b", penwidth=1.2, label="record"];
+    }
+
+    /* ── Providers ── */
+    subgraph cluster_provider {
+        label="Providers";
+        labeljust=l;
+        color="#c9d8ed";
+        style="filled,rounded";
+        fillcolor="#e4edf9";
+        fontname="Helvetica-Bold";
+        fontsize=16;
+        margin=22;
+
+        fs [label="Filesystem", fillcolor="#f5f9ff"];
+        proc [label="Process", fillcolor="#f5f9ff"];
+        mcpprov [label="MCP", fillcolor="#f5f9ff"];
+        httpprov [label="HTTP", fillcolor="#f5f9ff"];
+    }
+
+    /* ── External World ── */
+    subgraph cluster_world {
+        label="External World";
+        labeljust=l;
+        color="#e0cfdb";
+        style="filled,rounded";
+        fillcolor="#f2e8ef";
+        fontname="Helvetica-Bold";
+        fontsize=16;
+        margin=22;
+
+        disk [label="Files / Shell", fillcolor="#fff7fb"];
+        services [label="APIs / MCP Servers\nWeb / Databases", fillcolor="#fff7fb"];
+    }
+
+    /* ── Main flow ── */
+    agent -> gate [label="kernel.submit()", fontname="Courier", fontsize=11, penwidth=2, color="#166534"];
+
+    gate -> fs [label="dispatch"];
+    gate -> proc;
+    gate -> mcpprov;
+    gate -> httpprov;
+
+    fs -> disk;
+    proc -> disk;
+    mcpprov -> services;
+    httpprov -> services;
+
+    /* ── Forbidden path ── */
+    agent -> fs [style=dashed, color="#dc2626", penwidth=1.4,
+                 label="  ✗ direct access forbidden  ", fontcolor="#dc2626", fontsize=10,
+                 constraint=false];
+}

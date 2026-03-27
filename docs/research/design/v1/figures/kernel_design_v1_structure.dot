@@ -1,0 +1,101 @@
+digraph KernelDesignV1Structure {
+    graph [
+        rankdir=LR,
+        splines=ortho,
+        pad=0.25,
+        nodesep=0.45,
+        ranksep=0.75,
+        bgcolor="#fcfcfb",
+        fontname="Helvetica"
+    ];
+
+    node [
+        shape=box,
+        style="rounded,filled",
+        color="#334155",
+        penwidth=1.4,
+        fontname="Helvetica",
+        fontsize=14,
+        margin="0.18,0.12",
+        fillcolor="#ffffff"
+    ];
+
+    edge [
+        color="#475569",
+        penwidth=1.6,
+        arrowsize=0.8,
+        fontname="Helvetica",
+        fontsize=11
+    ];
+
+    subgraph cluster_userland {
+        label="Userland";
+        color="#efe5d8";
+        style="filled,rounded";
+        fillcolor="#efe5d8";
+        fontname="Helvetica-Bold";
+        fontsize=18;
+        margin=18;
+
+        agent [label="Agent Loop", fillcolor="#fffaf0"];
+        apps [label="Planners / Memory /\nApplication Logic", fillcolor="#fffaf0"];
+    }
+
+    subgraph cluster_kernel {
+        label="Agent OS Kernel v1";
+        color="#dfeee8";
+        style="filled,rounded";
+        fillcolor="#dfeee8";
+        fontname="Helvetica-Bold";
+        fontsize=18;
+        margin=18;
+
+        kapi [label="Kernel API", fillcolor="#f9fcfa"];
+        gateway [label="Action Gateway", fillcolor="#f9fcfa"];
+        cap [label="Capability\nEnforcement", fillcolor="#f9fcfa"];
+        scope [label="Resource Scoping /\nIsolation", fillcolor="#f9fcfa"];
+        dispatch [label="Provider Dispatcher", fillcolor="#f9fcfa"];
+        audit [label="Audit Record", fillcolor="#eef7f3"];
+    }
+
+    subgraph cluster_provider {
+        label="Controlled Providers";
+        color="#e4edf9";
+        style="filled,rounded";
+        fillcolor="#e4edf9";
+        fontname="Helvetica-Bold";
+        fontsize=18;
+        margin=18;
+
+        fs [label="FS / Shell /\nProcess Provider", fillcolor="#f5f9ff"];
+        remote [label="MCP / HTTP /\nDB Provider", fillcolor="#f5f9ff"];
+    }
+
+    subgraph cluster_world {
+        label="External World";
+        color="#f2e8ef";
+        style="filled,rounded";
+        fillcolor="#f2e8ef";
+        fontname="Helvetica-Bold";
+        fontsize=18;
+        margin=18;
+
+        host [label="Host Filesystem /\nProcesses", fillcolor="#fff7fb"];
+        services [label="MCP Servers /\nWeb / APIs / DBs", fillcolor="#fff7fb"];
+    }
+
+    agent -> kapi [label="action intent"];
+    apps -> agent [style=dashed, color="#94a3b8", label="internal reasoning context"];
+    kapi -> gateway;
+    gateway -> cap;
+    cap -> scope;
+    scope -> dispatch;
+    dispatch -> fs;
+    dispatch -> remote;
+    dispatch -> audit [label="record"];
+    fs -> host;
+    remote -> services;
+
+    agent -> fs [style=dashed, color="#b45309", label="forbidden direct access"];
+    agent -> remote [style=dashed, color="#b45309"];
+}
