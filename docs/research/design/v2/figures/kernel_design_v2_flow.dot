@@ -1,0 +1,79 @@
+digraph KernelDesignV2Flow {
+    graph [
+        rankdir=TB,
+        splines=polyline,
+        pad=0.4,
+        nodesep=0.45,
+        ranksep=0.5,
+        bgcolor="#fcfcfb",
+        fontname="Helvetica"
+    ];
+
+    node [
+        shape=box,
+        style="rounded,filled",
+        color="#334155",
+        penwidth=1.4,
+        fontname="Helvetica",
+        fontsize=13,
+        margin="0.2,0.12",
+        fillcolor="#ffffff"
+    ];
+
+    edge [
+        color="#475569",
+        penwidth=1.4,
+        arrowsize=0.7,
+        fontname="Helvetica",
+        fontsize=11
+    ];
+
+    /* ── Entry ── */
+    start [label="Agent calls  kernel.submit(request)", fillcolor="#fffaf0", color="#b45309", penwidth=2, fontname="Courier", fontsize=12];
+
+    /* ── Steps ── */
+    validate [label="1. Validate format", fillcolor="#f9fcfa"];
+    valid_q [label="valid?", shape=diamond, fillcolor="#fefce8", fontsize=12, margin="0.14,0.1"];
+
+    authorize [label="2. Match against Policy", fillcolor="#f9fcfa"];
+    allowed_q [label="allowed?", shape=diamond, fillcolor="#fefce8", fontsize=12, margin="0.14,0.1"];
+
+    resolve [label="3. Resolve provider", fillcolor="#f9fcfa"];
+    found_q [label="found?", shape=diamond, fillcolor="#fefce8", fontsize=12, margin="0.14,0.1"];
+
+    execute [label="4. provider.execute(request)", fillcolor="#eef7f3", fontname="Courier", fontsize=12];
+    exec_q [label="success?", shape=diamond, fillcolor="#fefce8", fontsize=12, margin="0.14,0.1"];
+
+    /* ── Terminals ── */
+    log_ok [label="Log  OK", fillcolor="#eef7f3", fontsize=11];
+    ok [label="return  ActionResult(OK, data)", fillcolor="#dcfce7", color="#166534", penwidth=2, fontname="Courier", fontsize=11];
+
+    invalid [label="Log INVALID → return ERROR", fillcolor="#fee2e2", color="#991b1b", penwidth=1.6, fontsize=11];
+    denied [label="Log DENIED → return DENIED", fillcolor="#fee2e2", color="#991b1b", penwidth=1.6, fontsize=11];
+    noprov [label="Log NO_PROVIDER → return ERROR", fillcolor="#fee2e2", color="#991b1b", penwidth=1.6, fontsize=11];
+    failed [label="Log FAILED → return ERROR", fillcolor="#fee2e2", color="#991b1b", penwidth=1.6, fontsize=11];
+
+    /* ── Happy path ── */
+    start -> validate;
+    validate -> valid_q;
+    valid_q -> authorize [label="yes", fontcolor="#166534"];
+    authorize -> allowed_q;
+    allowed_q -> resolve [label="yes", fontcolor="#166534"];
+    resolve -> found_q;
+    found_q -> execute [label="yes", fontcolor="#166534"];
+    execute -> exec_q;
+    exec_q -> log_ok [label="yes", fontcolor="#166534"];
+    log_ok -> ok;
+
+    /* ── Error paths ── */
+    valid_q -> invalid [label="no", fontcolor="#991b1b"];
+    allowed_q -> denied [label="no", fontcolor="#991b1b"];
+    found_q -> noprov [label="no", fontcolor="#991b1b"];
+    exec_q -> failed [label="no", fontcolor="#991b1b"];
+
+    /* ── Align error nodes ── */
+    { rank=same; validate; invalid; }
+    { rank=same; authorize; denied; }
+    { rank=same; resolve; noprov; }
+    { rank=same; log_ok; failed; }
+}

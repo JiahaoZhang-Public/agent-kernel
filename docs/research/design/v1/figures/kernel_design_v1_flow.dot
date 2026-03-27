@@ -1,0 +1,53 @@
+digraph KernelDesignV1Flow {
+    graph [
+        rankdir=TB,
+        splines=ortho,
+        pad=0.25,
+        nodesep=0.35,
+        ranksep=0.55,
+        bgcolor="#fcfcfb",
+        fontname="Helvetica"
+    ];
+
+    node [
+        shape=box,
+        style="rounded,filled",
+        color="#334155",
+        penwidth=1.4,
+        fontname="Helvetica",
+        fontsize=14,
+        margin="0.20,0.14",
+        fillcolor="#ffffff"
+    ];
+
+    edge [
+        color="#475569",
+        penwidth=1.6,
+        arrowsize=0.8,
+        fontname="Helvetica",
+        fontsize=11
+    ];
+
+    intent [label="Userland Agent emits\nworld-facing action intent", fillcolor="#fffaf0"];
+    gateway [label="Action Gateway\nvalidate + normalize", fillcolor="#f9fcfa"];
+    cap [label="Capability Enforcement\nallow or deny", fillcolor="#f9fcfa"];
+    scope [label="Resource Scoping\nlimit target and handle set", fillcolor="#f9fcfa"];
+    dispatch [label="Provider Dispatcher", fillcolor="#f9fcfa"];
+    provider [label="Controlled Provider", fillcolor="#f5f9ff"];
+    world [label="External World", fillcolor="#fff7fb"];
+    audit [label="Audit Record", fillcolor="#eef7f3"];
+    result [label="Result / Observation\nreturned to userland", fillcolor="#f7fbff"];
+    deny [label="Denied", fillcolor="#fff4e5", color="#b45309"];
+
+    intent -> gateway;
+    gateway -> cap;
+    cap -> scope [label="allow"];
+    cap -> deny [label="deny", color="#b45309", fontcolor="#b45309"];
+    scope -> dispatch;
+    dispatch -> provider;
+    provider -> world;
+    provider -> audit [label="record"];
+    deny -> audit [label="record", color="#b45309", fontcolor="#b45309"];
+    provider -> result [label="output"];
+    audit -> result [style=dashed, color="#94a3b8", label="status visible"];
+}

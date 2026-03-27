@@ -1,0 +1,115 @@
+digraph ExampleDanger {
+    graph [
+        rankdir=TB,
+        splines=polyline,
+        pad=0.5,
+        nodesep=0.35,
+        ranksep=0.45,
+        bgcolor="#fcfcfb",
+        fontname="Helvetica",
+        label="Example 2:  Danger Case — Agent Attempts to DROP Database Table",
+        labelloc=t,
+        fontsize=18,
+        fontcolor="#1e293b"
+    ];
+
+    node [
+        shape=box,
+        style="rounded,filled",
+        color="#334155",
+        penwidth=1.2,
+        fontname="Helvetica",
+        fontsize=11,
+        margin="0.16,0.10",
+        fillcolor="#ffffff"
+    ];
+
+    edge [
+        color="#475569",
+        penwidth=1.2,
+        arrowsize=0.65,
+        fontname="Helvetica",
+        fontsize=10
+    ];
+
+    /* ============================================================ */
+    /*  LEFT SIDE — Naive Agent Loop                                */
+    /* ============================================================ */
+    subgraph cluster_naive {
+        label="Naive Agent Loop";
+        labeljust=l;
+        color="#ef4444";
+        style="filled,rounded";
+        fillcolor="#fef2f2";
+        fontname="Helvetica-Bold";
+        fontsize=14;
+        fontcolor="#991b1b";
+        margin=18;
+
+        n1 [label="User: \"Clean up the test data\nfrom the database\"", fillcolor="#fecaca", shape=note];
+        n2 [label="LLM misinterprets intent.\nGenerates destructive SQL:\nDROP TABLE users;", fillcolor="#fef2f2", fontname="Courier", fontsize=10];
+        n3 [label="execute()\ndirectly runs SQL\non production DB", fillcolor="#fee2e2", color="#dc2626", penwidth=1.6];
+        n4 [label="Database executes\nDROP TABLE users;\n\n☠  Table destroyed.\n     Data is gone.", fillcolor="#fca5a5", color="#991b1b", penwidth=2, fontsize=12];
+        n5 [label="LLM responds:\n\"Done! Cleaned up the data.\"", fillcolor="#fef2f2"];
+        n6 [label="✗  Catastrophic failure:\n• no check on SQL type\n• no scope on target DB/table\n• no record of what was run\n• no way to prevent or recover\n• user unaware of data loss", fillcolor="#fee2e2", fontsize=10, color="#991b1b", penwidth=1.6];
+
+        n1 -> n2;
+        n2 -> n3;
+        n3 -> n4;
+        n4 -> n5;
+        n5 -> n6 [style=dashed, color="#991b1b"];
+    }
+
+    /* ============================================================ */
+    /*  RIGHT SIDE — With Agent OS Kernel                           */
+    /* ============================================================ */
+    subgraph cluster_kernel {
+        label="With Agent OS Kernel v2";
+        labeljust=l;
+        color="#22c55e";
+        style="filled,rounded";
+        fillcolor="#f0fdf4";
+        fontname="Helvetica-Bold";
+        fontsize=14;
+        fontcolor="#166534";
+        margin=18;
+
+        k1 [label="User: \"Clean up the test data\nfrom the database\"", fillcolor="#dcfce7", shape=note];
+        k2 [label="LLM misinterprets intent.\nGenerates destructive SQL:\nDROP TABLE users;", fillcolor="#f0fdf4", fontname="Courier", fontsize=10];
+        k3 [label="kernel.submit(\n  action=\"db.write\"\n  target=\"prod/users\"\n  params={sql: \"DROP TABLE...\"}\n)", fillcolor="#f0fdf4", fontname="Courier", fontsize=10];
+
+        subgraph cluster_gate2 {
+            label="Gate";
+            color="#86efac";
+            style="filled,rounded";
+            fillcolor="#e2fee9";
+            fontname="Helvetica-Bold";
+            fontsize=11;
+            margin=14;
+
+            k4 [label="1. Validate ✓\n    well-formed ActionRequest", fillcolor="#ffffff", fontsize=10];
+            k5 [label="2. Policy check ✗  DENIED\n\n    Policy only allows:\n    • db.read: prod/**\n    • db.write: prod/test_*\n\n    \"prod/users\" does not match\n    any db.write rule.", fillcolor="#fee2e2", fontsize=10, color="#991b1b", penwidth=1.6];
+            k6 [label="3. Log  { status: DENIED,\n   action: db.write,\n   target: prod/users }", fillcolor="#eef7f3", fontname="Courier", fontsize=9];
+        }
+
+        k7 [label="Gate returns:\nActionResult(\n  status=DENIED,\n  error=\"not permitted\"\n)", fillcolor="#f0fdf4", fontname="Courier", fontsize=10];
+        k8 [label="LLM receives denial.\nRevises approach:\n\"I can only write to test_*\ntables. Let me run\nDELETE FROM test_data\nWHERE ...\"", fillcolor="#f0fdf4", fontsize=10];
+        k9 [label="✓  Disaster prevented:\n• destructive op blocked by policy\n• scoped to test_* tables only\n• denial recorded in audit log\n• agent self-corrects\n• production data untouched", fillcolor="#dcfce7", fontsize=10, color="#166534", penwidth=1.6];
+
+        k1 -> k2;
+        k2 -> k3;
+        k3 -> k4;
+        k4 -> k5;
+        k5 -> k6;
+        k6 -> k7;
+        k7 -> k8;
+        k8 -> k9 [style=dashed, color="#166534"];
+    }
+
+    /* ── Layout alignment ── */
+    { rank=source; n1; k1; }
+    { rank=same; n6; k9; }
+
+    /* ── invisible edge to keep left/right side by side ── */
+    n1 -> k1 [style=invis];
+}

@@ -1,0 +1,114 @@
+digraph KernelDesignV21RollbackFlow {
+    graph [
+        rankdir=TB,
+        splines=polyline,
+        pad=0.5,
+        nodesep=0.4,
+        ranksep=0.45,
+        bgcolor="#fcfcfb",
+        fontname="Helvetica",
+        label="Reversible Action Layer — Submit and Rollback Flows",
+        labelloc=t,
+        fontsize=18,
+        fontcolor="#1e293b"
+    ];
+
+    node [
+        shape=box,
+        style="rounded,filled",
+        color="#334155",
+        penwidth=1.2,
+        fontname="Helvetica",
+        fontsize=12,
+        margin="0.18,0.10",
+        fillcolor="#ffffff"
+    ];
+
+    edge [
+        color="#475569",
+        penwidth=1.4,
+        arrowsize=0.7,
+        fontname="Helvetica",
+        fontsize=10
+    ];
+
+    /* ============================================================ */
+    /*  LEFT — Submit with Snapshot                                 */
+    /* ============================================================ */
+    subgraph cluster_submit {
+        label="layer.submit(request)";
+        labeljust=l;
+        color="#6b21a8";
+        style="filled,rounded";
+        fillcolor="#faf5ff";
+        fontname="Helvetica-Bold";
+        fontsize=14;
+        fontcolor="#6b21a8";
+        margin=18;
+
+        s1 [label="Receive ActionRequest", fillcolor="#f5f0fa"];
+        s2 [label="Find matching\nSnapshotStrategy", fillcolor="#f5f0fa"];
+        s2q [label="found?", shape=diamond, fillcolor="#fefce8", fontsize=11, margin="0.14,0.1"];
+        s3 [label="strategy.capture(request)\nsave pre-execution state", fillcolor="#ede5f5"];
+        s4 [label="kernel.submit(request)\n→ Gate → Policy → Provider → Log", fillcolor="#eef7f3", fontname="Courier", fontsize=10];
+        s4q [label="status\n== OK?", shape=diamond, fillcolor="#fefce8", fontsize=11, margin="0.14,0.1"];
+        s5 [label="store.save(\n  record_id, request, snapshot\n)", fillcolor="#ede5f5", fontname="Courier", fontsize=10];
+        s6 [label="return ActionResult\n(with record_id)", fillcolor="#dcfce7", color="#166534", penwidth=1.6, fontsize=11];
+        s7 [label="return ActionResult\n(no snapshot saved)", fillcolor="#fee2e2", color="#991b1b", penwidth=1.6, fontsize=11];
+        s8 [label="kernel.submit(request)\n→ no snapshot captured", fillcolor="#eef7f3", fontname="Courier", fontsize=10];
+        s8b [label="return ActionResult\n(not reversible)", fillcolor="#f5f0fa", fontsize=11];
+
+        s1 -> s2;
+        s2 -> s2q;
+        s2q -> s3 [label="yes", fontcolor="#166534"];
+        s2q -> s8 [label="no", fontcolor="#64748b"];
+        s3 -> s4;
+        s4 -> s4q;
+        s4q -> s5 [label="yes", fontcolor="#166534"];
+        s4q -> s7 [label="no", fontcolor="#991b1b"];
+        s5 -> s6;
+        s8 -> s8b;
+    }
+
+    /* ============================================================ */
+    /*  RIGHT — Rollback                                            */
+    /* ============================================================ */
+    subgraph cluster_rollback {
+        label="layer.rollback(record_id)";
+        labeljust=l;
+        color="#b45309";
+        style="filled,rounded";
+        fillcolor="#fffbeb";
+        fontname="Helvetica-Bold";
+        fontsize=14;
+        fontcolor="#92400e";
+        margin=18;
+
+        r1 [label="Receive record_id", fillcolor="#fef3c7"];
+        r2 [label="store.load(record_id)", fillcolor="#fef3c7"];
+        r2q [label="found?", shape=diamond, fillcolor="#fefce8", fontsize=11, margin="0.14,0.1"];
+        r3 [label="Find SnapshotStrategy\nfor original action", fillcolor="#fef3c7"];
+        r4 [label="strategy.restore(\n  original_request, snapshot\n) → restore_request", fillcolor="#fef9c3", fontname="Courier", fontsize=10];
+        r5 [label="kernel.submit(restore_request)\n→ Gate → Policy → Provider → Log", fillcolor="#eef7f3", fontname="Courier", fontsize=10];
+        r5q [label="status\n== OK?", shape=diamond, fillcolor="#fefce8", fontsize=11, margin="0.14,0.1"];
+        r6 [label="store.delete(record_id)\nclean up snapshot", fillcolor="#fef9c3"];
+        r7 [label="return ActionResult(OK)\nrollback complete", fillcolor="#dcfce7", color="#166534", penwidth=1.6, fontsize=11];
+        r8 [label="return ActionResult(ERROR)\nno snapshot found", fillcolor="#fee2e2", color="#991b1b", penwidth=1.6, fontsize=11];
+        r9 [label="return ActionResult(ERROR)\nrestore failed", fillcolor="#fee2e2", color="#991b1b", penwidth=1.6, fontsize=11];
+
+        r1 -> r2;
+        r2 -> r2q;
+        r2q -> r3 [label="yes", fontcolor="#166534"];
+        r2q -> r8 [label="no", fontcolor="#991b1b"];
+        r3 -> r4;
+        r4 -> r5;
+        r5 -> r5q;
+        r5q -> r6 [label="yes", fontcolor="#166534"];
+        r5q -> r9 [label="no", fontcolor="#991b1b"];
+        r6 -> r7;
+    }
+
+    /* ── Layout alignment ── */
+    { rank=source; s1; r1; }
+    s1 -> r1 [style=invis];
+}

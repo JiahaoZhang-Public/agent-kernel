@@ -1,0 +1,117 @@
+digraph ExampleNormal {
+    graph [
+        rankdir=TB,
+        splines=polyline,
+        pad=0.5,
+        nodesep=0.35,
+        ranksep=0.45,
+        bgcolor="#fcfcfb",
+        fontname="Helvetica",
+        label="Example 1:  Normal Case — MCP Tool Call (search academic papers)",
+        labelloc=t,
+        fontsize=18,
+        fontcolor="#1e293b"
+    ];
+
+    node [
+        shape=box,
+        style="rounded,filled",
+        color="#334155",
+        penwidth=1.2,
+        fontname="Helvetica",
+        fontsize=11,
+        margin="0.16,0.10",
+        fillcolor="#ffffff"
+    ];
+
+    edge [
+        color="#475569",
+        penwidth=1.2,
+        arrowsize=0.65,
+        fontname="Helvetica",
+        fontsize=10
+    ];
+
+    /* ============================================================ */
+    /*  LEFT SIDE — Naive Agent Loop                                */
+    /* ============================================================ */
+    subgraph cluster_naive {
+        label="Naive Agent Loop";
+        labeljust=l;
+        color="#fbbf24";
+        style="filled,rounded";
+        fillcolor="#fffbeb";
+        fontname="Helvetica-Bold";
+        fontsize=14;
+        fontcolor="#92400e";
+        margin=18;
+
+        n1 [label="User: \"Find recent papers\non transformer efficiency\"", fillcolor="#fef3c7", shape=note];
+        n2 [label="LLM generates tool call:\nmcp.scholar.search(\n  query=\"transformer efficiency\"\n)", fillcolor="#fffaf0", fontname="Courier", fontsize=10];
+        n3 [label="execute()\ndirectly calls MCP server", fillcolor="#fef9c3"];
+        n4 [label="MCP scholar server\nreturns 5 papers", fillcolor="#ecfdf5"];
+        n5 [label="LLM summarizes results\nfor user", fillcolor="#fffaf0"];
+        n6 [label="✓  Works, but...\n• no authorization check\n• no record of what was accessed\n• any MCP server is reachable\n• no resource boundary", fillcolor="#fef9c3", fontsize=10, color="#b45309", penwidth=1.6];
+
+        n1 -> n2;
+        n2 -> n3;
+        n3 -> n4;
+        n4 -> n5;
+        n5 -> n6 [style=dashed, color="#b45309"];
+    }
+
+    /* ============================================================ */
+    /*  RIGHT SIDE — With Agent OS Kernel                           */
+    /* ============================================================ */
+    subgraph cluster_kernel {
+        label="With Agent OS Kernel v2";
+        labeljust=l;
+        color="#22c55e";
+        style="filled,rounded";
+        fillcolor="#f0fdf4";
+        fontname="Helvetica-Bold";
+        fontsize=14;
+        fontcolor="#166534";
+        margin=18;
+
+        k1 [label="User: \"Find recent papers\non transformer efficiency\"", fillcolor="#dcfce7", shape=note];
+        k2 [label="LLM generates tool call:\nmcp.scholar.search(\n  query=\"transformer efficiency\"\n)", fillcolor="#f0fdf4", fontname="Courier", fontsize=10];
+        k3 [label="kernel.submit(\n  action=\"mcp.call\"\n  target=\"scholar/search\"\n  params={query: ...}\n)", fillcolor="#f0fdf4", fontname="Courier", fontsize=10];
+
+        subgraph cluster_gate1 {
+            label="Gate";
+            color="#86efac";
+            style="filled,rounded";
+            fillcolor="#e2fee9";
+            fontname="Helvetica-Bold";
+            fontsize=11;
+            margin=14;
+
+            k4 [label="1. Validate ✓\n    well-formed ActionRequest", fillcolor="#ffffff", fontsize=10];
+            k5 [label="2. Policy check ✓\n    rule: mcp.call → scholar/*", fillcolor="#ffffff", fontsize=10];
+            k6 [label="3. Dispatch → MCP Provider", fillcolor="#ffffff", fontsize=10];
+            k7 [label="4. Log  { status: OK,\n   action: mcp.call,\n   target: scholar/search }", fillcolor="#eef7f3", fontname="Courier", fontsize=9];
+        }
+
+        k8 [label="MCP scholar server\nreturns 5 papers", fillcolor="#ecfdf5"];
+        k9 [label="LLM summarizes results\nfor user", fillcolor="#f0fdf4"];
+        k10 [label="✓  Same result, plus:\n• authorized against policy\n• scoped to scholar/* only\n• audit trail recorded\n• other MCP servers unreachable", fillcolor="#dcfce7", fontsize=10, color="#166534", penwidth=1.6];
+
+        k1 -> k2;
+        k2 -> k3;
+        k3 -> k4;
+        k4 -> k5;
+        k5 -> k6;
+        k6 -> k8;
+        k8 -> k7;
+        k7 -> k9;
+        k9 -> k10 [style=dashed, color="#166534"];
+    }
+
+    /* ── Layout alignment ── */
+    { rank=source; n1; k1; }
+    { rank=same; n6; k10; }
+
+    /* ── invisible edge to keep left/right side by side ── */
+    n1 -> k1 [style=invis];
+}
