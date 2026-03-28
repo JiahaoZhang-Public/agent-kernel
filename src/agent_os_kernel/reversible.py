@@ -82,6 +82,31 @@ class FsWriteSnapshotStrategy(SnapshotStrategy):
             )
 
 
+class FsDeleteSnapshotStrategy(SnapshotStrategy):
+    """Snapshot strategy for fs.delete actions.
+
+    Captures file content before deletion so it can be restored via fs.write.
+    If the file did not exist before delete, capture returns None and no
+    snapshot is persisted (the delete was a no-op, nothing to restore).
+    """
+
+    def supports(self, request: ActionRequest) -> bool:
+        return request.action == "fs.delete"
+
+    def capture(self, request: ActionRequest) -> dict[str, Any] | None:
+        path = Path(request.target)
+        if path.exists():
+            return {"content": path.read_text()}
+        return None
+
+    def restore(self, request: ActionRequest, snapshot: dict[str, Any]) -> ActionRequest:
+        return ActionRequest(
+            action="fs.write",
+            target=request.target,
+            params={"content": snapshot["content"]},
+        )
+
+
 class SnapshotStore:
     """Persists snapshots indexed by record ID.
 
@@ -95,33 +120,48 @@ class SnapshotStore:
 
     def save(self, record_id: str, request: ActionRequest, snapshot: Any) -> None:
         """Save a snapshot associated with a record ID."""
+        from datetime import datetime, timezone
+
+        now = datetime.now(timezone.utc)
         entry = {
             "record_id": record_id,
-            "request": {
+            "original_request": {
                 "action": request.action,
                 "target": request.target,
                 "params": request.params,
             },
             "snapshot": snapshot,
-            "created_at": time.time(),
+            "created_at": now.isoformat(),
+            "expires_at": (datetime.fromtimestamp(now.timestamp() + self._ttl_seconds, tz=timezone.utc)).isoformat(),
         }
         path = self._store_dir / f"{record_id}.json"
         path.write_text(json.dumps(entry))
 
     def load(self, record_id: str) -> tuple[ActionRequest, Any] | None:
         """Load a snapshot by record ID. Returns None if not found or expired."""
+        from datetime import datetime, timezone
+
         path = self._store_dir / f"{record_id}.json"
         if not path.exists():
             return None
 
         entry = json.loads(path.read_text())
 
-        # Check TTL
-        if time.time() - entry["created_at"] > self._ttl_seconds:
-            path.unlink(missing_ok=True)
-            return None
+        # Check TTL via expires_at (preferred) or created_at (legacy)
+        if "expires_at" in entry:
+            expires_at = datetime.fromisoformat(entry["expires_at"])
+            if datetime.now(timezone.utc) >= expires_at:
+                path.unlink(missing_ok=True)
+                return None
+        elif "created_at" in entry:
+            # Legacy format: created_at as float
+            created = entry["created_at"]
+            if isinstance(created, int | float) and time.time() - created > self._ttl_seconds:
+                path.unlink(missing_ok=True)
+                return None
 
-        req_data = entry["request"]
+        # Support both new ("original_request") and legacy ("request") key
+        req_data = entry.get("original_request") or entry["request"]
         request = ActionRequest(
             action=req_data["action"],
             target=req_data["target"],
@@ -157,6 +197,9 @@ class ReversibleActionLayer:
 
         Per design §7.1-7.2: capture and persistence failures are best-effort.
         If either fails, the action proceeds without rollback capability.
+
+        Note: record_id is set on the returned ActionResult, not on the
+        kernel's log Record. See Record.record_id docstring for rationale.
         """
         # 1. Find a matching snapshot strategy
         strategy = self._find_strategy(request)

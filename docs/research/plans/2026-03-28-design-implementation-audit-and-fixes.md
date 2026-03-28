@@ -1,7 +1,7 @@
 # Plan: Design-to-Implementation Audit & Alignment Fixes
 
 **Date:** 2026-03-28
-**Status:** In Progress
+**Status:** Done
 **Target Release:** v0.4.1
 **Scope:** v2 + v2.1 design compliance, correctness fixes, test coverage
 
@@ -152,18 +152,18 @@ The project's `CLAUDE.md` states: "The agent backbone must use OpenAI Agents SDK
 
 | # | Action | Priority | Complexity | Files |
 |---|---|---|---|---|
-| 5 | Update CLAUDE.md to remove stale OpenAI SDK reference | P1 | Small | `CLAUDE.md` |
-| 6 | Document record_id log gap in code comments | P1 | Small | `reversible.py`, `models.py` |
-| 7 | Align SnapshotStore JSON schema with design | P2 | Small | `reversible.py`, `test_reversible.py` |
-| 8 | Add `SubmitFn` type alias | P2 | Small | `models.py` or `agent_loop.py` |
+| 5 | ~~Update CLAUDE.md to remove stale OpenAI SDK reference~~ | P1 | Small | ~~CLAUDE.md~~ **Done** |
+| 6 | ~~Document record_id log gap in code comments~~ | P1 | Small | ~~reversible.py, models.py~~ **Done** |
+| 7 | ~~Align SnapshotStore JSON schema with design~~ | P2 | Small | ~~reversible.py, test_reversible.py~~ **Done** |
+| 8 | ~~Add `SubmitFn` type alias~~ | P2 | Small | ~~models.py, agent_loop.py~~ **Done** |
 
 ### Longer-Term (v0.5+)
 
 | # | Action | Priority | Complexity |
 |---|---|---|---|
-| 9 | Write formal design doc for AgentLoop/ToolDef (v2.2 or standalone) | P2 | Medium |
-| 10 | Decide on record_id-in-log strategy if external tooling needs it | P2 | Medium |
-| 11 | Additional snapshot strategies (proc.exec, net.http) | P2 | Medium |
+| 9 | ~~Write formal design doc for AgentLoop/ToolDef~~ | P2 | Medium | **Done** — `docs/research/design/v2.2/Kernel_Design_v2.2.md` |
+| 10 | ~~Decide on record_id-in-log strategy~~ | P2 | Medium | **Done** — option (c): caller-side only, documented in code |
+| 11 | ~~Additional snapshot strategies~~ | P2 | Medium | **Done** — `FsDeleteSnapshotStrategy` added |
 
 ## 5. Audit Methodology
 

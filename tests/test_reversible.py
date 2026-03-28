@@ -15,6 +15,7 @@ from agent_os_kernel.models import ActionRequest
 from agent_os_kernel.policy import CapabilityRule, Policy
 from agent_os_kernel.providers.filesystem import FilesystemProvider
 from agent_os_kernel.reversible import (
+    FsDeleteSnapshotStrategy,
     FsWriteSnapshotStrategy,
     ReversibleActionLayer,
     SnapshotStore,
@@ -71,6 +72,46 @@ class TestFsWriteSnapshotStrategy:
 
 
 # ---------------------------------------------------------------------------
+# FsDeleteSnapshotStrategy
+# ---------------------------------------------------------------------------
+
+
+class TestFsDeleteSnapshotStrategy:
+    """Tests for FsDeleteSnapshotStrategy."""
+
+    def test_supports_fs_delete(self):
+        strategy = FsDeleteSnapshotStrategy()
+        assert strategy.supports(ActionRequest(action="fs.delete", target="/tmp/x")) is True
+
+    def test_does_not_support_other_actions(self):
+        strategy = FsDeleteSnapshotStrategy()
+        assert strategy.supports(ActionRequest(action="fs.read", target="/tmp/x")) is False
+        assert strategy.supports(ActionRequest(action="fs.write", target="/tmp/x")) is False
+
+    def test_capture_existing_file(self, tmp_path):
+        f = tmp_path / "to_delete.txt"
+        f.write_text("precious data")
+        strategy = FsDeleteSnapshotStrategy()
+        snapshot = strategy.capture(ActionRequest(action="fs.delete", target=str(f)))
+        assert snapshot is not None
+        assert snapshot["content"] == "precious data"
+
+    def test_capture_nonexistent_file_returns_none(self, tmp_path):
+        strategy = FsDeleteSnapshotStrategy()
+        snapshot = strategy.capture(ActionRequest(action="fs.delete", target=str(tmp_path / "nope.txt")))
+        assert snapshot is None
+
+    def test_restore_produces_write(self, tmp_path):
+        strategy = FsDeleteSnapshotStrategy()
+        snapshot = {"content": "precious data"}
+        req = ActionRequest(action="fs.delete", target=str(tmp_path / "x.txt"))
+        restore_req = strategy.restore(req, snapshot)
+        assert restore_req.action == "fs.write"
+        assert restore_req.target == str(tmp_path / "x.txt")
+        assert restore_req.params["content"] == "precious data"
+
+
+# ---------------------------------------------------------------------------
 # SnapshotStore
 # ---------------------------------------------------------------------------
 
@@ -109,14 +150,18 @@ class TestSnapshotStore:
 
     def test_ttl_expiry(self, tmp_path):
         """Expired snapshots should return None and be cleaned up."""
+        from datetime import datetime, timezone
+
         store = SnapshotStore(tmp_path / "snapshots", ttl_seconds=1)
         req = ActionRequest(action="fs.write", target="/t")
         store.save("rec-ttl", req, {"existed": False})
 
-        # Manually backdate the created_at timestamp
+        # Manually backdate both timestamps to simulate expiry
         snap_file = tmp_path / "snapshots" / "rec-ttl.json"
         entry = json.loads(snap_file.read_text())
-        entry["created_at"] = time.time() - 100  # 100 seconds ago
+        past = datetime.fromtimestamp(time.time() - 100, tz=timezone.utc)
+        entry["created_at"] = past.isoformat()
+        entry["expires_at"] = past.isoformat()
         snap_file.write_text(json.dumps(entry))
 
         assert store.load("rec-ttl") is None
@@ -142,6 +187,9 @@ class TestSnapshotStore:
         data = json.loads(snap_file.read_text())
         assert data["record_id"] == "rec-json"
         assert "created_at" in data
+        assert "expires_at" in data
+        assert "original_request" in data
+        assert data["original_request"]["action"] == "fs.write"
 
 
 # ---------------------------------------------------------------------------
@@ -346,6 +394,57 @@ class TestReversibleActionLayer:
             # Roll back file_b
             layer.rollback(r2.record_id)
             assert file_b.read_text() == "orig_b"
+
+
+# ---------------------------------------------------------------------------
+# FsDeleteSnapshotStrategy Integration
+# ---------------------------------------------------------------------------
+
+
+class TestReversibleDeleteIntegration:
+    """Integration tests for fs.delete rollback."""
+
+    def test_rollback_delete_restores_file(self, tmp_path):
+        """Deleting a file and rolling back should restore it."""
+        log_path = tmp_path / "kernel.log"
+        target = tmp_path / "important.txt"
+        target.write_text("critical data")
+
+        with Kernel(
+            policy=_fs_policy(),
+            providers=[FilesystemProvider()],
+            log_path=log_path,
+        ) as k:
+            store = SnapshotStore(tmp_path / "snapshots")
+            layer = ReversibleActionLayer(k, [FsWriteSnapshotStrategy(), FsDeleteSnapshotStrategy()], store)
+
+            result = layer.submit(ActionRequest(action="fs.delete", target=str(target)))
+            assert result.status == "OK"
+            assert not target.exists()
+            assert result.record_id is not None
+
+            rollback_result = layer.rollback(result.record_id)
+            assert rollback_result.status == "OK"
+            assert target.read_text() == "critical data"
+
+    def test_delete_nonexistent_file_no_snapshot(self, tmp_path):
+        """Deleting a nonexistent file: capture returns None, no snapshot."""
+        log_path = tmp_path / "kernel.log"
+        target = tmp_path / "nope.txt"
+
+        with Kernel(
+            policy=_fs_policy(),
+            providers=[FilesystemProvider()],
+            log_path=log_path,
+        ) as k:
+            store = SnapshotStore(tmp_path / "snapshots")
+            layer = ReversibleActionLayer(k, [FsDeleteSnapshotStrategy()], store)
+
+            # This will fail at the provider level (file doesn't exist)
+            result = layer.submit(ActionRequest(action="fs.delete", target=str(target)))
+            # Provider raises FileNotFoundError → status ERROR, no snapshot
+            assert result.status == "ERROR"
+            assert result.record_id is None
 
 
 # ---------------------------------------------------------------------------

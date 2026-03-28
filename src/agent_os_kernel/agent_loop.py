@@ -19,7 +19,7 @@ from typing import Any
 import litellm
 
 from agent_os_kernel.kernel import Kernel
-from agent_os_kernel.models import ActionRequest, ActionResult
+from agent_os_kernel.models import ActionRequest, SubmitFn
 
 
 @dataclass
@@ -62,7 +62,7 @@ class AgentLoop:
         instructions: str = "",
         tools: list[ToolDef] | None = None,
         max_turns: int = 20,
-        submit: Callable[[ActionRequest], ActionResult] | None = None,
+        submit: SubmitFn | None = None,
     ) -> None:
         """Initialize the agent loop.
 
