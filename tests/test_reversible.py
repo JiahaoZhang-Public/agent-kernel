@@ -1,12 +1,14 @@
 """Tests for the Reversible Action Layer (v2.1).
 
-Covers FsWriteSnapshotStrategy, SnapshotStore, and ReversibleActionLayer.
+Covers FsWriteSnapshotStrategy, SnapshotStore, ReversibleActionLayer,
+and failure injection tests per design §10.6.
 """
 
 from __future__ import annotations
 
 import json
 import time
+from unittest.mock import MagicMock, patch
 
 from agent_os_kernel.kernel import Kernel
 from agent_os_kernel.models import ActionRequest
@@ -16,6 +18,7 @@ from agent_os_kernel.reversible import (
     FsWriteSnapshotStrategy,
     ReversibleActionLayer,
     SnapshotStore,
+    SnapshotStrategy,
 )
 
 # ---------------------------------------------------------------------------
@@ -214,7 +217,11 @@ class TestReversibleActionLayer:
 
             # Overwrite the file
             result = layer.submit(
-                ActionRequest(action="fs.write", target=str(target), params={"content": "overwritten"})
+                ActionRequest(
+                    action="fs.write",
+                    target=str(target),
+                    params={"content": "overwritten"},
+                )
             )
             assert target.read_text() == "overwritten"
             record_id = result.record_id
@@ -238,7 +245,11 @@ class TestReversibleActionLayer:
             layer = ReversibleActionLayer(k, [FsWriteSnapshotStrategy()], store)
 
             result = layer.submit(
-                ActionRequest(action="fs.write", target=str(target), params={"content": "new content"})
+                ActionRequest(
+                    action="fs.write",
+                    target=str(target),
+                    params={"content": "new content"},
+                )
             )
             assert target.exists()
             record_id = result.record_id
@@ -298,7 +309,11 @@ class TestReversibleActionLayer:
             layer = ReversibleActionLayer(k, [FsWriteSnapshotStrategy()], store)
 
             result = layer.submit(
-                ActionRequest(action="fs.write", target=str(tmp_path / "x.txt"), params={"content": "x"})
+                ActionRequest(
+                    action="fs.write",
+                    target=str(tmp_path / "x.txt"),
+                    params={"content": "x"},
+                )
             )
 
         assert result.status == "DENIED"
@@ -331,3 +346,147 @@ class TestReversibleActionLayer:
             # Roll back file_b
             layer.rollback(r2.record_id)
             assert file_b.read_text() == "orig_b"
+
+
+# ---------------------------------------------------------------------------
+# Failure Injection Tests (design §10.6)
+# ---------------------------------------------------------------------------
+
+
+class TestFailureInjection:
+    """Tests for graceful degradation per design §7.1-7.2 and §10.6."""
+
+    def test_capture_raises_exception_action_continues(self, tmp_path):
+        """Per §7.1: capture failure → action proceeds without snapshot."""
+        log_path = tmp_path / "kernel.log"
+        target = tmp_path / "file.txt"
+
+        failing_strategy = MagicMock(spec=SnapshotStrategy)
+        failing_strategy.supports.return_value = True
+        failing_strategy.capture.side_effect = PermissionError("cannot read file")
+
+        with Kernel(
+            policy=_fs_policy(),
+            providers=[FilesystemProvider()],
+            log_path=log_path,
+        ) as k:
+            store = SnapshotStore(tmp_path / "snapshots")
+            layer = ReversibleActionLayer(k, [failing_strategy], store)
+
+            result = layer.submit(ActionRequest(action="fs.write", target=str(target), params={"content": "hello"}))
+
+        assert result.status == "OK"
+        assert result.record_id is None  # No snapshot due to capture failure
+        assert target.read_text() == "hello"
+
+    def test_store_save_raises_exception_action_completes(self, tmp_path):
+        """Per §7.2: store.save failure → action completes without record_id."""
+        log_path = tmp_path / "kernel.log"
+        target = tmp_path / "file.txt"
+
+        with Kernel(
+            policy=_fs_policy(),
+            providers=[FilesystemProvider()],
+            log_path=log_path,
+        ) as k:
+            store = SnapshotStore(tmp_path / "snapshots")
+            layer = ReversibleActionLayer(k, [FsWriteSnapshotStrategy()], store)
+
+            with patch.object(store, "save", side_effect=OSError("disk full")):
+                result = layer.submit(
+                    ActionRequest(
+                        action="fs.write",
+                        target=str(target),
+                        params={"content": "hello"},
+                    )
+                )
+
+        assert result.status == "OK"
+        assert result.record_id is None  # No record_id due to save failure
+        assert target.read_text() == "hello"
+
+    def test_store_load_returns_none_for_rollback(self, tmp_path):
+        """Per §10.6: rollback non-existent record → error message."""
+        log_path = tmp_path / "kernel.log"
+        with Kernel(
+            policy=_fs_policy(),
+            providers=[FilesystemProvider()],
+            log_path=log_path,
+        ) as k:
+            store = SnapshotStore(tmp_path / "snapshots")
+            layer = ReversibleActionLayer(k, [FsWriteSnapshotStrategy()], store)
+            result = layer.rollback("nonexistent-record")
+        assert result.status == "ERROR"
+        assert "no snapshot" in result.error
+
+    def test_kernel_denies_restore_action(self, tmp_path):
+        """Per §10.6: if policy no longer permits restore, rollback is denied."""
+        log_path = tmp_path / "kernel.log"
+        target = tmp_path / "file.txt"
+        target.write_text("original")
+
+        # Start with full permissions
+        full_policy = _fs_policy()
+        with Kernel(
+            policy=full_policy,
+            providers=[FilesystemProvider()],
+            log_path=log_path,
+        ) as k:
+            store = SnapshotStore(tmp_path / "snapshots")
+            layer = ReversibleActionLayer(k, [FsWriteSnapshotStrategy()], store)
+
+            result = layer.submit(
+                ActionRequest(
+                    action="fs.write",
+                    target=str(target),
+                    params={"content": "overwritten"},
+                )
+            )
+            record_id = result.record_id
+            assert record_id is not None
+
+        # Now create a kernel with restrictive policy (no fs.write)
+        restrictive_policy = Policy(capabilities=[CapabilityRule(action="fs.read", resource="*")])
+        with Kernel(
+            policy=restrictive_policy,
+            providers=[FilesystemProvider()],
+            log_path=tmp_path / "kernel2.log",
+        ) as k2:
+            layer2 = ReversibleActionLayer(k2, [FsWriteSnapshotStrategy()], store)
+            rollback_result = layer2.rollback(record_id)
+
+        assert rollback_result.status == "DENIED"
+        # Snapshot should still exist (not cleaned up on failed rollback)
+        assert store.load(record_id) is not None
+
+    def test_concurrent_modification_before_rollback(self, tmp_path):
+        """Per §10.6: file modified externally → rollback restores stale state."""
+        log_path = tmp_path / "kernel.log"
+        target = tmp_path / "file.txt"
+        target.write_text("version_1")
+
+        with Kernel(
+            policy=_fs_policy(),
+            providers=[FilesystemProvider()],
+            log_path=log_path,
+        ) as k:
+            store = SnapshotStore(tmp_path / "snapshots")
+            layer = ReversibleActionLayer(k, [FsWriteSnapshotStrategy()], store)
+
+            # Agent writes version_2
+            result = layer.submit(
+                ActionRequest(
+                    action="fs.write",
+                    target=str(target),
+                    params={"content": "version_2"},
+                )
+            )
+            record_id = result.record_id
+
+            # External process writes version_3
+            target.write_text("version_3")
+
+            # Rollback restores version_1 (stale), not version_3
+            rollback_result = layer.rollback(record_id)
+            assert rollback_result.status == "OK"
+            assert target.read_text() == "version_1"

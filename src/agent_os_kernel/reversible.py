@@ -13,6 +13,7 @@ Three new components:
 from __future__ import annotations
 
 import json
+import logging
 import time
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -21,6 +22,8 @@ from uuid import uuid4
 
 from agent_os_kernel.kernel import Kernel
 from agent_os_kernel.models import ActionRequest, ActionResult
+
+logger = logging.getLogger(__name__)
 
 
 class SnapshotStrategy(ABC):
@@ -150,23 +153,44 @@ class ReversibleActionLayer:
         self.store = store
 
     def submit(self, request: ActionRequest) -> ActionResult:
-        """Submit an action, capturing a snapshot if the action is reversible."""
+        """Submit an action, capturing a snapshot if the action is reversible.
+
+        Per design §7.1-7.2: capture and persistence failures are best-effort.
+        If either fails, the action proceeds without rollback capability.
+        """
         # 1. Find a matching snapshot strategy
         strategy = self._find_strategy(request)
 
-        # 2. Capture snapshot before execution
+        # 2. Capture snapshot before execution (best-effort per §7.1)
         snapshot = None
         if strategy is not None:
-            snapshot = strategy.capture(request)
+            try:
+                snapshot = strategy.capture(request)
+            except Exception:
+                logger.warning(
+                    "Snapshot capture failed for %s:%s",
+                    request.action,
+                    request.target,
+                    exc_info=True,
+                )
+                snapshot = None
 
         # 3. Execute through the kernel
         result = self.kernel.submit(request)
 
-        # 4. If execution succeeded and we have a snapshot, persist it
+        # 4. If execution succeeded and we have a snapshot, persist it (best-effort per §7.2)
         if result.status == "OK" and snapshot is not None:
             record_id = self._generate_record_id()
-            self.store.save(record_id, request, snapshot)
-            result.record_id = record_id
+            try:
+                self.store.save(record_id, request, snapshot)
+                result.record_id = record_id
+            except Exception:
+                logger.warning(
+                    "Failed to save snapshot for %s:%s",
+                    request.action,
+                    request.target,
+                    exc_info=True,
+                )
 
         return result
 
