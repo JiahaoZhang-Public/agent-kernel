@@ -176,7 +176,11 @@ class McpClient:
                 continue
 
             if response.get("id") != request_id:
-                logger.warning("Unexpected response id: %s (expected %d)", response.get("id"), request_id)
+                logger.warning(
+                    "Unexpected response id: %s (expected %d)",
+                    response.get("id"),
+                    request_id,
+                )
                 continue
 
             if "error" in response:

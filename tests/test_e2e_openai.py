@@ -51,14 +51,16 @@ def _make_workspace(tmp_path: Path) -> tuple[Path, str, str]:
     (ws / "data.csv").write_text("name,score\nalice,90\nbob,85\ncarol,92\n")
 
     policy_file = tmp_path / "policy.yaml"
-    policy_file.write_text(f"""capabilities:
+    policy_file.write_text(
+        f"""capabilities:
   - action: fs.read
     resource: {ws}/**
   - action: fs.write
     resource: {ws}/output/**
   - action: proc.exec
     resource: echo
-""")
+"""
+    )
     log_path = tmp_path / "kernel.log"
     return ws, str(policy_file), str(log_path)
 

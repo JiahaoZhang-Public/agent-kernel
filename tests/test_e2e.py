@@ -129,12 +129,14 @@ class TestFullKernelWorkflow:
         ws.mkdir()
 
         policy_file = tmp_path / "policy.yaml"
-        policy_file.write_text(f"""capabilities:
+        policy_file.write_text(
+            f"""capabilities:
   - action: fs.read
     resource: {ws}/**
   - action: proc.exec
     resource: echo
-""")
+"""
+        )
 
         log_path = tmp_path / "kernel.log"
         with Kernel(

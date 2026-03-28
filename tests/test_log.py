@@ -10,7 +10,12 @@ from agent_os_kernel.log import Log
 from agent_os_kernel.models import Record
 
 
-def _make_record(action: str = "fs.read", target: str = "/workspace/data.csv", status: str = "OK", **kwargs) -> Record:
+def _make_record(
+    action: str = "fs.read",
+    target: str = "/workspace/data.csv",
+    status: str = "OK",
+    **kwargs,
+) -> Record:
     return Record(
         timestamp="2026-01-01T00:00:00+00:00",
         action=action,

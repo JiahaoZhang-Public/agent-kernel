@@ -21,7 +21,8 @@ from agent_os_kernel.providers.mcp import McpClient, McpProvider
 # Helper: self-contained Python MCP server script
 # ---------------------------------------------------------------------------
 
-MCP_SERVER_SCRIPT = textwrap.dedent("""
+MCP_SERVER_SCRIPT = textwrap.dedent(
+    """
 import sys
 import json
 
@@ -146,7 +147,8 @@ while True:
                 "id": msg_id,
                 "error": {"code": -32601, "message": f"Unknown method: {method}"},
             })
-""")
+"""
+)
 
 
 @pytest.fixture

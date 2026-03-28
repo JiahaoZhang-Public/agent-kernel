@@ -204,7 +204,11 @@ class TestHttpProvider:
     def test_get_request(self, http_server):
         provider = HttpProvider()
         result = provider.execute(
-            ActionRequest(action="net.http", target=f"{http_server}/test", params={"method": "GET"})
+            ActionRequest(
+                action="net.http",
+                target=f"{http_server}/test",
+                params={"method": "GET"},
+            )
         )
         assert result["status_code"] == 200
         assert result["body"] == "ok"

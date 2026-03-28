@@ -66,7 +66,10 @@ def _make_llm_response(finish_reason="stop", content="Done", tool_calls=None):
                 {
                     "id": tc.id,
                     "type": "function",
-                    "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                    "function": {
+                        "name": tc.function.name,
+                        "arguments": tc.function.arguments,
+                    },
                 }
                 for tc in tool_calls
             ],
@@ -245,7 +248,10 @@ class TestExecuteToolCall:
         td = ToolDef(
             name="read_file",
             description="Read a file",
-            parameters={"type": "object", "properties": {"filepath": {"type": "string"}}},
+            parameters={
+                "type": "object",
+                "properties": {"filepath": {"type": "string"}},
+            },
             action="fs.read",
             target_from=lambda args: args["filepath"],
         )

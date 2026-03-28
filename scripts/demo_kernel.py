@@ -59,12 +59,22 @@ def main() -> None:
             # 2. Allowed write
             out_file = ws / "output" / "report.txt"
             result = kernel.submit(
-                ActionRequest(action="fs.write", target=str(out_file), params={"content": "Generated report"})
+                ActionRequest(
+                    action="fs.write",
+                    target=str(out_file),
+                    params={"content": "Generated report"},
+                )
             )
             print(f"Write result: status={result.status}, data={result.data}")
 
             # 3. Denied action (writing outside allowed path)
-            result = kernel.submit(ActionRequest(action="fs.write", target="/etc/passwd", params={"content": "hacked"}))
+            result = kernel.submit(
+                ActionRequest(
+                    action="fs.write",
+                    target="/etc/passwd",
+                    params={"content": "hacked"},
+                )
+            )
             print(f"Denied write: status={result.status}, error={result.error}")
 
             # 4. Process execution

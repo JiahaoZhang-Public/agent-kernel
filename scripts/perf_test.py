@@ -278,7 +278,11 @@ def test_mixed_stress(n_ops: int = 1000) -> PerfResult:
                 elif i % 3 == 1:
                     # Denied (wrong action)
                     result = kernel.submit(
-                        ActionRequest(action="fs.write", target=str(ws / "data.txt"), params={"content": "x"})
+                        ActionRequest(
+                            action="fs.write",
+                            target=str(ws / "data.txt"),
+                            params={"content": "x"},
+                        )
                     )
                 else:
                     # Denied (out of scope)
