@@ -74,6 +74,7 @@ cat kernel.log
 
 ```python
 from agent_os_kernel.reversible import (
+    FsDeleteSnapshotStrategy,
     FsWriteSnapshotStrategy,
     ReversibleActionLayer,
     SnapshotStore,
@@ -82,7 +83,7 @@ from agent_os_kernel.reversible import (
 # Wrap the kernel with the reversible layer
 layer = ReversibleActionLayer(
     kernel=kernel,
-    strategies=[FsWriteSnapshotStrategy()],
+    strategies=[FsWriteSnapshotStrategy(), FsDeleteSnapshotStrategy()],
     store=SnapshotStore(".snapshots"),
 )
 

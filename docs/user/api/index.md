@@ -72,6 +72,10 @@
 
 ::: agent_os_kernel.reversible.FsWriteSnapshotStrategy
 
+### FsDeleteSnapshotStrategy
+
+::: agent_os_kernel.reversible.FsDeleteSnapshotStrategy
+
 ### SnapshotStore
 
 ::: agent_os_kernel.reversible.SnapshotStore
@@ -89,6 +93,10 @@
 ### run_agent_loop
 
 ::: agent_os_kernel.agent_loop.run_agent_loop
+
+### SubmitFn
+
+::: agent_os_kernel.models.SubmitFn
 
 ## CLI
 
