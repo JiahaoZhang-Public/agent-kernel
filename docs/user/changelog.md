@@ -1,5 +1,31 @@
 # Changelog
 
+## v0.4.1 (2026-03-28)
+
+### Fixed
+
+- **Best-effort error handling in ReversibleActionLayer** — `strategy.capture()` and `store.save()` failures now degrade gracefully per design §7.1-7.2 instead of crashing the submit flow
+- **CLAUDE.md stale reference** — removed outdated "OpenAI Agents SDK" requirement, updated to reflect kernel-native agent loop with LiteLLM
+
+### Added
+
+- **`FsDeleteSnapshotStrategy`** — snapshot strategy for `fs.delete` actions; captures file content before deletion, restores via `fs.write` on rollback
+- **`SubmitFn` type alias** — `Callable[[ActionRequest], ActionResult]` for clearer submit callable contracts
+- **v2.2 design document** — formal specification for `AgentLoop` and `ToolDef` at `docs/research/design/v2.2/Kernel_Design_v2.2.md`
+- **5 failure injection tests** — per design §10.6: capture failure, save failure, nonexistent rollback, policy-denied restore, concurrent modification
+- **2 FsDeleteSnapshotStrategy integration tests** — rollback after delete, delete nonexistent file
+- **Reversible layer components exported** — `ReversibleActionLayer`, `SnapshotStrategy`, `SnapshotStore`, `FsWriteSnapshotStrategy`, `FsDeleteSnapshotStrategy`, `SubmitFn` added to package `__all__`
+
+### Changed
+
+- **SnapshotStore JSON schema** aligned with v2.1 design: `original_request` key (was `request`), ISO 8601 `created_at` (was float), `expires_at` field added. Backward-compatible loading of legacy format.
+- **record_id log gap documented** — `Record.record_id` and `ActionResult.record_id` docstrings clarify that log-to-snapshot correlation is caller-side only (kernel unchanged per v2.1 principle)
+
+### Validated
+
+- 204 unit/integration tests passing, 96% coverage
+- ruff lint, ruff format, mypy strict — all passing
+
 ## v0.4.0 (2026-03-27)
 
 ### Breaking Changes
