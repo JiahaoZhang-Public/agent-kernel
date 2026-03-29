@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.4.3 (2026-03-29)
+
+### Added
+
+- **PyPI publishing** — `pip install py-agent-kernel` now available
+- **GitHub Actions publish workflow** — automated release via OIDC Trusted Publisher
+- **30 runnable examples** organized by 8 categories with shared helpers
+- **`.env.example`** documenting required environment variables
+- **Project logo** in MkDocs documentation site
+- **CLI entry point** — `agent-kernel` command available after pip install
+
+### Changed
+
+- **Package name** — renamed to `py-agent-kernel` on PyPI (`agent-os-kernel` taken by Microsoft)
+- **README tagline** — toned down to "A security kernel for LLM agents"
+- **pyproject.toml** — added project URLs, sdist exclusions, proper description
+- **Installation docs** — `pip install` as primary method, source install as alternative
+
 ## v0.4.2 (2026-03-29)
 
 ### Fixed
