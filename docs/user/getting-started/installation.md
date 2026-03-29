@@ -3,9 +3,16 @@
 ## Prerequisites
 
 - Python >= 3.10
-- [uv](https://docs.astral.sh/uv/) package manager
 
-## Setup
+## Install from PyPI
+
+```bash
+pip install py-agent-kernel
+```
+
+## Install from Source (for development)
+
+Requires [uv](https://docs.astral.sh/uv/) package manager.
 
 ```bash
 # Clone the repository
@@ -22,5 +29,9 @@ uv run pre-commit install
 ## Verify
 
 ```bash
+# If installed from PyPI
+python -c "from agent_os_kernel import Kernel; print('OK')"
+
+# If installed from source
 uv run pytest
 ```

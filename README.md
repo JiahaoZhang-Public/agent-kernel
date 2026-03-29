@@ -7,7 +7,7 @@
 
 [![CI](https://github.com/JiahaoZhang-Public/agent-kernel/actions/workflows/ci.yml/badge.svg)](https://github.com/JiahaoZhang-Public/agent-kernel/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/badge/coverage-96%25-brightgreen)](https://github.com/JiahaoZhang-Public/agent-kernel)
-[![PyPI](https://img.shields.io/badge/version-0.4.2-blue)](https://github.com/JiahaoZhang-Public/agent-kernel/releases)
+[![PyPI](https://img.shields.io/pypi/v/py-agent-kernel?color=blue)](https://pypi.org/project/py-agent-kernel/)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -65,6 +65,12 @@ The key difference from wrapper-based approaches: `ToolDef` contains **zero exec
 ---
 
 ## Quick Start
+
+```bash
+pip install py-agent-kernel
+```
+
+Or install from source:
 
 ```bash
 git clone https://github.com/JiahaoZhang-Public/agent-kernel.git
