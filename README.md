@@ -134,6 +134,29 @@ with Kernel(policy="policy.yaml", providers=[FilesystemProvider()], log_path="ke
 
 Every tool call the LLM generates is converted to an `ActionRequest` and submitted through the kernel Gate. Denied actions return an error string to the LLM — the agent continues running, but the action is blocked and logged.
 
+### More Examples
+
+See [`examples/`](examples/) for 30 runnable examples organized by category:
+
+| Category | Description | LLM Required |
+|---|---|---|
+| `01_basic_kernel/` | Direct `kernel.submit()`, status codes, audit log | No |
+| `02_policy/` | Inline, YAML, glob matching, constraints | No |
+| `03_agent_loop/` | LLM-driven agents, multi-tool, denial handling | Yes |
+| `04_reversible/` | Snapshot, rollback, TTL expiry | No |
+| `05_providers/` | Filesystem, process, HTTP GET/POST | No |
+| `06_multi_provider/` | Provider chaining, agent with all providers | Mixed |
+| `07_custom_provider/` | Build your own provider | No |
+| `08_advanced/` | Callable target_from, agent+reversible, log analysis | Mixed |
+
+```bash
+# Run any example
+uv run python examples/01_basic_kernel/hello_kernel.py
+
+# LLM examples need an API key
+OPENAI_API_KEY=sk-... uv run python examples/03_agent_loop/file_analyst.py
+```
+
 ---
 
 ## Reversible Actions
@@ -290,6 +313,7 @@ src/agent_os_kernel/
     └── mcp.py         # mcp.call (JSON-RPC 2.0 over stdio)
 
 tests/                 # 207+ tests, 96%+ coverage
+examples/              # 30 runnable examples (8 categories)
 scripts/               # perf_test.py, e2e_agent_demo.py, demo_kernel.py
 configs/               # example, restrictive, permissive policies
 docs/
@@ -318,7 +342,8 @@ The kernel design is versioned and documented in `docs/research/design/`:
 - [v0](docs/research/design/v0/Kernel_Design_v0.md) — initial concept
 - [v1](docs/research/design/v1/Kernel_Design_v1.md) — provider model
 - [v2](docs/research/design/v2/Kernel_Design_v2.md) — Gate + Policy + Log invariants
-- [v2.1](docs/research/design/v2.1/Kernel_Design_v2.1.md) — Reversible Action Layer *(current)*
+- [v2.1](docs/research/design/v2.1/Kernel_Design_v2.1.md) — Reversible Action Layer
+- [v2.2](docs/research/design/v2.2/Kernel_Design_v2.2.md) — Kernel-Native Agent Loop *(current)*
 
 ---
 
