@@ -8,8 +8,8 @@ Demonstrates a real agent workflow:
 4. All actions authorized and logged by the kernel
 
 Usage:
-    OPENAI_API_KEY=sk-... OPENAI_BASE_URL=https://api.openai-proxy.org/v1 \
-    OPENAI_MODEL=gpt-5.4-mini python scripts/e2e_agent_demo.py
+    OPENAI_API_KEY=sk-... OPENAI_MODEL=gpt-5.4-mini \
+    python scripts/e2e_agent_demo.py
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ from agent_os_kernel.reversible import (
 )
 
 API_KEY = os.environ.get("OPENAI_API_KEY", "")
-BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://api.openai-proxy.org/v1")
+BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
 MODEL = os.environ.get("OPENAI_MODEL", "gpt-5.4-mini")
 
 

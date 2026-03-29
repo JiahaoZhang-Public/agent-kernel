@@ -75,7 +75,7 @@
 ### Validated
 
 - 207 unit/integration tests passing, 96%+ coverage
-- 5 live E2E tests passing (gpt-5.4-mini via api.openai-proxy.org)
+- 5 live E2E tests passing (gpt-5.4-mini)
 - All 15 real MCP integration tests passing
 - All core kernel tests unchanged and passing
 
@@ -110,9 +110,9 @@
 - **`test_agent_exec_process_tool`**: `args: list` produced JSON schema without `items`, rejected by OpenAI API with 400; changed to `args: list[str] | None = None`
 - **Assertion normalization**: handle space-separated output from LLM echo responses
 
-### Validated on Real Server (`gpuhub-root-rtx4090-48`)
+### Validated on Real Server (GPU server, RTX 4090)
 
-- All 5 live OpenAI API tests pass (model: gpt-5.4-mini via api.openai-proxy.org)
+- All 5 live OpenAI API tests pass (model: gpt-5.4-mini)
 - All 15 real MCP server integration tests pass
 - All 6 performance benchmarks complete with zero errors
 - Full E2E demo runs end-to-end: agent writes report, rollback restores file, audit log complete

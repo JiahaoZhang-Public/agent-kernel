@@ -235,7 +235,7 @@ python -m agent_os_kernel version
 
 ## Performance
 
-Measured on `gpuhub-root-rtx4090-48` (Python 3.10):
+Measured on GPU server with RTX 4090 (Python 3.10):
 
 | Benchmark | Throughput | p99 Latency |
 |---|---|---|
@@ -262,8 +262,8 @@ uv run pytest --cov=src/agent_os_kernel          # with coverage report
 uv run ruff check src/ && uv run ruff format src/
 
 # E2E demo (requires API key)
-OPENAI_API_KEY=sk-... OPENAI_BASE_URL=https://api.openai-proxy.org/v1 \
-    OPENAI_MODEL=gpt-5.4-mini python scripts/e2e_agent_demo.py
+OPENAI_API_KEY=sk-... OPENAI_MODEL=gpt-5.4-mini \
+    python scripts/e2e_agent_demo.py
 
 # Performance benchmarks
 python scripts/perf_test.py
