@@ -7,7 +7,7 @@ These tests validate the full kernel-native agent loop workflow:
 
 Requires environment variables:
   OPENAI_API_KEY      — API key
-  OPENAI_BASE_URL     — proxy base URL (e.g. https://api.openai-proxy.org/v1)
+  OPENAI_BASE_URL     — base URL (default: https://api.openai.com/v1)
   OPENAI_MODEL        — model name (e.g. gpt-5.4-mini)
 """
 
@@ -29,7 +29,7 @@ from agent_os_kernel.providers.process import ProcessProvider
 # ---------------------------------------------------------------------------
 
 API_KEY = os.environ.get("OPENAI_API_KEY", "")
-BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://api.openai-proxy.org/v1")
+BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
 MODEL = os.environ.get("OPENAI_MODEL", "gpt-5.4-mini")
 
 SKIP_IF_NO_KEY = pytest.mark.skipif(not API_KEY, reason="OPENAI_API_KEY not set")
