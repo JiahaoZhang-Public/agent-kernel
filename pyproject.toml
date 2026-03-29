@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "agent-os-kernel"
+name = "agent-kernel"
 version = "0.4.2"
 description = "A security boundary for LLM agents — policy, audit, and rollback for every tool call"
 readme = "README.md"
