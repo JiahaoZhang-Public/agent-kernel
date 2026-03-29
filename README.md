@@ -24,20 +24,11 @@ When you give an LLM access to tools, nothing enforces what it can actually do. 
 
 Agent OS Kernel is that layer:
 
-```
-User Prompt
-    ↓
-AgentLoop ←──── LiteLLM (100+ LLM providers)
-    ↓
-tool_calls[]
-    ↓
-kernel.submit(request)          ← sole execution path
-    ├── Policy: allow / deny
-    ├── Provider: execute action
-    └── Log: append audit record
-    ↓
-tool results → LLM → loop
-```
+<div align="center">
+
+![Architecture](docs/assets/architecture.png)
+
+</div>
 
 **One API. Three invariants.**
 

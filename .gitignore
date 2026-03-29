@@ -1,4 +1,7 @@
 CLAUDE.md
+.claude/
+.superpowers/
+docs/superpowers/
 
 # Python
 __pycache__/
