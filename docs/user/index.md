@@ -1,4 +1,7 @@
-# Agent OS Kernel
+<div align="center">
+  <img src="logo.png" alt="Agent OS Kernel" width="200">
+  <h1>Agent OS Kernel</h1>
+</div>
 
 A security boundary for LLM agents. Every tool call an agent makes is authorized by policy, logged immutably, and optionally reversible — enforced at the architecture level, not by convention.
 
