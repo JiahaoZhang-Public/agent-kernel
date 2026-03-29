@@ -1,6 +1,9 @@
-site_name: agent-os-kernel
-docs_dir: user
-site_dir: site
+site_name: Agent OS Kernel
+site_url: https://py-agent-kernel.readthedocs.io/
+repo_url: https://github.com/JiahaoZhang-Public/agent-kernel
+repo_name: agent-kernel
+docs_dir: docs/user
+site_dir: docs/site
 
 theme:
   name: material
@@ -17,7 +20,7 @@ plugins:
   - mkdocstrings:
       handlers:
         python:
-          paths: [../../src]
+          paths: [src]
           options:
             show_source: true
             show_root_heading: true
