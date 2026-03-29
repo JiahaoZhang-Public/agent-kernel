@@ -35,7 +35,7 @@ docs = [
 [project.urls]
 Homepage = "https://github.com/JiahaoZhang-Public/agent-kernel"
 Repository = "https://github.com/JiahaoZhang-Public/agent-kernel"
-Documentation = "https://github.com/JiahaoZhang-Public/agent-kernel#readme"
+Documentation = "https://agent-kernel.readthedocs.io/en/latest/"
 Changelog = "https://github.com/JiahaoZhang-Public/agent-kernel/blob/main/docs/user/changelog.md"
 
 [project.scripts]

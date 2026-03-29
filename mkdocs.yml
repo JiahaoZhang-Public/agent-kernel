@@ -1,5 +1,5 @@
 site_name: Agent OS Kernel
-site_url: https://py-agent-kernel.readthedocs.io/
+site_url: https://agent-kernel.readthedocs.io/en/latest/
 repo_url: https://github.com/JiahaoZhang-Public/agent-kernel
 repo_name: agent-kernel
 docs_dir: docs/user

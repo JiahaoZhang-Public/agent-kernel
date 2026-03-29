@@ -9,6 +9,7 @@
 [![Coverage](https://img.shields.io/badge/coverage-96%25-brightgreen)](https://github.com/JiahaoZhang-Public/agent-kernel)
 [![PyPI](https://img.shields.io/pypi/v/py-agent-kernel?color=blue)](https://pypi.org/project/py-agent-kernel/)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
+[![Docs](https://readthedocs.org/projects/agent-kernel/badge/?version=latest)](https://agent-kernel.readthedocs.io/en/latest/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 </div>
