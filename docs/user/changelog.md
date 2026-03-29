@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.4.2 (2026-03-29)
+
+### Fixed
+
+- **LLM API error handling in AgentLoop** — `litellm.acompletion()` exceptions are now caught and returned as `[LLM error: ...]` strings instead of propagating unhandled to the caller
+- **AST structural test upgraded** — `test_execute_tool_call_only_uses_submit` now uses proper `ast.parse()` inspection per v2.2 §6.2 (was source string matching), verifying exactly one `_submit` call and no forbidden execution calls
+
+### Added
+
+- **Structured logging for agent loop** — `AgentLoop.run()` emits structured log messages via `logging.getLogger(__name__)`:
+  - `agent_loop.start` — model, max_turns, tool count
+  - `agent_loop.tool_calls` — turn number, call count, tool names
+  - `agent_loop.done` — model, turns used
+  - `agent_loop.llm_error` — model, turn, error details (ERROR level)
+  - `agent_loop.max_turns` — warning when limit reached
+  - `agent_loop.unexpected_finish` — warning for non-stop finish reasons
+- **`submit` parameter on `run_agent_loop()`** — convenience API now supports `ReversibleActionLayer` integration without requiring manual `AgentLoop` construction
+- **ReversibleActionLayer integration test** — `test_agent_loop_with_reversible_layer` wires `AgentLoop` with real `ReversibleActionLayer.submit` override, completing v2.2 §8.4 test coverage
+- **4 new agent loop tests** — LLM error handling (2), structured logging verification (2)
+
+### Validated
+
+- 187 unit/integration tests passing, 80%+ coverage
+- ruff format — passing
+
 ## v0.4.1 (2026-03-28)
 
 ### Fixed

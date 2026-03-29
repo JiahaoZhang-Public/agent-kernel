@@ -215,7 +215,7 @@ def test_agent_read_then_write_workflow(tmp_path):
         out_path = str(out_dir / "summary.txt")
         result = asyncio.run(
             loop.run(
-                f"Read {ws}/data.csv, compute the average score, " f"and write a one-line summary to {out_path}.",
+                f"Read {ws}/data.csv, compute the average score, and write a one-line summary to {out_path}.",
             )
         )
 

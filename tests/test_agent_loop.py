@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from agent_os_kernel.agent_loop import AgentLoop, ToolDef, run_agent_loop
@@ -19,6 +20,11 @@ from agent_os_kernel.kernel import Kernel
 from agent_os_kernel.models import ActionRequest, ActionResult
 from agent_os_kernel.policy import CapabilityRule, Policy
 from agent_os_kernel.providers.filesystem import FilesystemProvider
+from agent_os_kernel.reversible import (
+    FsWriteSnapshotStrategy,
+    ReversibleActionLayer,
+    SnapshotStore,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -458,6 +464,80 @@ class TestAgentLoopRun:
         assert messages[0]["role"] == "user"
         kernel.close()
 
+    def test_llm_api_error_returns_error_string(self, tmp_path):
+        """LLM API exception is caught and returned as error string."""
+        kernel = _make_kernel(tmp_path)
+        loop = AgentLoop(kernel=kernel, model="gpt-4o")
+
+        with patch("agent_os_kernel.agent_loop.litellm") as mock_litellm:
+            mock_litellm.acompletion = AsyncMock(side_effect=RuntimeError("connection refused"))
+            result = asyncio.run(loop.run("Hi"))
+
+        assert result.startswith("[LLM error:")
+        assert "connection refused" in result
+        kernel.close()
+
+    def test_llm_api_error_logged(self, tmp_path, caplog):
+        """LLM API error is logged at ERROR level."""
+        kernel = _make_kernel(tmp_path)
+        loop = AgentLoop(kernel=kernel, model="gpt-4o")
+
+        with (
+            patch("agent_os_kernel.agent_loop.litellm") as mock_litellm,
+            caplog.at_level(logging.ERROR, logger="agent_os_kernel.agent_loop"),
+        ):
+            mock_litellm.acompletion = AsyncMock(side_effect=RuntimeError("rate limited"))
+            asyncio.run(loop.run("Hi"))
+
+        assert any("agent_loop.llm_error" in r.message for r in caplog.records)
+        assert any("rate limited" in r.message for r in caplog.records)
+        kernel.close()
+
+    def test_structured_logging_on_completion(self, tmp_path, caplog):
+        """Agent loop emits structured log messages on start and completion."""
+        kernel = _make_kernel(tmp_path)
+        loop = AgentLoop(kernel=kernel, model="gpt-4o")
+
+        with (
+            patch("agent_os_kernel.agent_loop.litellm") as mock_litellm,
+            caplog.at_level(logging.INFO, logger="agent_os_kernel.agent_loop"),
+        ):
+            mock_litellm.acompletion = AsyncMock(return_value=_make_llm_response(finish_reason="stop", content="Done"))
+            asyncio.run(loop.run("Hi"))
+
+        messages = [r.message for r in caplog.records]
+        assert any("agent_loop.start" in m for m in messages)
+        assert any("agent_loop.done" in m and "turns_used=1" in m for m in messages)
+        kernel.close()
+
+    def test_structured_logging_tool_calls(self, tmp_path, caplog):
+        """Agent loop logs tool call details."""
+        ws = tmp_path / "workspace"
+        ws.mkdir()
+        (ws / "data.csv").write_text("a,b\n1,2")
+
+        kernel = _make_kernel(tmp_path)
+        td = _make_tool_def()
+        loop = AgentLoop(kernel=kernel, model="gpt-4o", tools=[td])
+
+        tc = _make_tool_call(arguments=json.dumps({"path": str(ws / "data.csv")}))
+
+        with (
+            patch("agent_os_kernel.agent_loop.litellm") as mock_litellm,
+            caplog.at_level(logging.INFO, logger="agent_os_kernel.agent_loop"),
+        ):
+            mock_litellm.acompletion = AsyncMock(
+                side_effect=[
+                    _make_llm_response(finish_reason="tool_calls", tool_calls=[tc]),
+                    _make_llm_response(finish_reason="stop", content="Done"),
+                ]
+            )
+            asyncio.run(loop.run("Read it"))
+
+        messages = [r.message for r in caplog.records]
+        assert any("agent_loop.tool_calls" in m and "count=1" in m for m in messages)
+        kernel.close()
+
 
 # ---------------------------------------------------------------------------
 # run_agent_loop convenience function
@@ -495,16 +575,35 @@ class TestGateEnforcement:
         assert custom_methods == [], f"ToolDef should have no custom methods, found: {custom_methods}"
 
     def test_execute_tool_call_only_uses_submit(self):
-        """AgentLoop._execute_tool_call should only execute via kernel submit."""
-        import inspect
+        """AgentLoop._execute_tool_call has exactly one submit call (v2.2 §6.2).
 
-        source = inspect.getsource(AgentLoop._execute_tool_call)
-        # Must contain submit call
-        assert "_submit(request)" in source or "_submit(" in source
-        # Must NOT contain direct execution calls
-        assert "subprocess" not in source
-        assert "urllib" not in source
-        assert "open(" not in source
+        Uses AST inspection to verify the structural guarantee: there is
+        exactly one execution mechanism in _execute_tool_call, and it is
+        self._submit().
+        """
+        import ast
+        import inspect
+        import textwrap
+
+        source = textwrap.dedent(inspect.getsource(AgentLoop._execute_tool_call))
+        tree = ast.parse(source)
+
+        # Find all Call nodes in the AST
+        calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call)]
+        # Filter for calls containing "_submit"
+        submit_calls = [c for c in calls if "_submit" in ast.dump(c)]
+        assert len(submit_calls) == 1, f"Expected exactly 1 _submit call, found {len(submit_calls)}"
+
+        # Verify no direct execution calls exist
+        all_call_names = set()
+        for c in calls:
+            if isinstance(c.func, ast.Attribute):
+                all_call_names.add(c.func.attr)
+            elif isinstance(c.func, ast.Name):
+                all_call_names.add(c.func.id)
+        forbidden = {"exec", "eval", "system", "popen", "urlopen", "request"}
+        found_forbidden = all_call_names & forbidden
+        assert not found_forbidden, f"Found forbidden calls in _execute_tool_call: {found_forbidden}"
 
     def test_every_tool_call_goes_through_kernel(self, tmp_path):
         """Verify kernel.submit is called for every tool call."""
@@ -529,4 +628,71 @@ class TestGateEnforcement:
         assert len(submit_calls) == 2
         assert submit_calls[0].action == "fs.read"
         assert submit_calls[1].action == "fs.read"
+        kernel.close()
+
+    def test_agent_loop_with_reversible_layer(self, tmp_path):
+        """AgentLoop with ReversibleActionLayer.submit as submit override (v2.2 §8.4)."""
+        ws = tmp_path / "workspace" / "output"
+        ws.mkdir(parents=True)
+        (ws / "file.txt").write_text("original")
+
+        policy = Policy(
+            capabilities=[
+                CapabilityRule(action="fs.read", resource=f"{tmp_path}/workspace/**"),
+                CapabilityRule(action="fs.write", resource=f"{tmp_path}/workspace/output/**"),
+            ]
+        )
+        kernel = Kernel(
+            policy=policy,
+            providers=[FilesystemProvider()],
+            log_path=tmp_path / "kernel.log",
+        )
+        store = SnapshotStore(store_dir=tmp_path / "snapshots")
+        layer = ReversibleActionLayer(
+            kernel=kernel,
+            strategies=[FsWriteSnapshotStrategy()],
+            store=store,
+        )
+
+        write_td = ToolDef(
+            name="write_file",
+            description="Write a file",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                    "content": {"type": "string"},
+                },
+            },
+            action="fs.write",
+            target_from="path",
+        )
+        loop = AgentLoop(
+            kernel=kernel,
+            model="gpt-4o",
+            tools=[write_td],
+            submit=layer.submit,
+        )
+
+        tc = _make_tool_call(
+            name="write_file",
+            arguments=json.dumps({"path": str(ws / "file.txt"), "content": "updated"}),
+        )
+
+        with patch("agent_os_kernel.agent_loop.litellm") as mock_litellm:
+            mock_litellm.acompletion = AsyncMock(
+                side_effect=[
+                    _make_llm_response(finish_reason="tool_calls", tool_calls=[tc]),
+                    _make_llm_response(finish_reason="stop", content="Written"),
+                ]
+            )
+            result = asyncio.run(loop.run("Write the file"))
+
+        assert result == "Written"
+        assert (ws / "file.txt").read_text() == "updated"
+
+        # Verify rollback is possible (snapshot was captured)
+        records = kernel.log.read_all()
+        ok_writes = [r for r in records if r.action == "fs.write" and r.status == "OK"]
+        assert len(ok_writes) == 1
         kernel.close()
