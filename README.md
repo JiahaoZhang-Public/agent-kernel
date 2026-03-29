@@ -3,7 +3,7 @@
 
 ![Agent OS Kernel](logo.png)
 
-**The world's first Agent OS Kernel.**
+**A security kernel for LLM agents.**
 
 [![CI](https://github.com/JiahaoZhang-Public/agent-kernel/actions/workflows/ci.yml/badge.svg)](https://github.com/JiahaoZhang-Public/agent-kernel/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/badge/coverage-96%25-brightgreen)](https://github.com/JiahaoZhang-Public/agent-kernel)
