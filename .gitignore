@@ -57,6 +57,7 @@ lightning_logs/
 # Environment & secrets
 .env
 .env.*
+!.env.example
 *.key
 
 # OS
