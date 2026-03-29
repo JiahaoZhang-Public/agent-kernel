@@ -191,6 +191,41 @@ class TestSnapshotStore:
         assert "original_request" in data
         assert data["original_request"]["action"] == "fs.write"
 
+    def test_legacy_format_ttl_expiry(self, tmp_path):
+        """Legacy snapshots using float created_at should expire correctly."""
+        store = SnapshotStore(tmp_path / "snapshots", ttl_seconds=1)
+        # Write a legacy-format snapshot manually
+        snap_file = tmp_path / "snapshots" / "rec-legacy.json"
+        snap_file.parent.mkdir(parents=True, exist_ok=True)
+        entry = {
+            "record_id": "rec-legacy",
+            "request": {"action": "fs.write", "target": "/t", "params": {}},
+            "snapshot": {"existed": False},
+            "created_at": time.time() - 100,
+        }
+        snap_file.write_text(json.dumps(entry))
+        assert store.load("rec-legacy") is None
+        assert not snap_file.exists()
+
+    def test_legacy_format_loads_successfully(self, tmp_path):
+        """Legacy snapshots with 'request' key should load correctly."""
+        store = SnapshotStore(tmp_path / "snapshots", ttl_seconds=3600)
+        snap_file = tmp_path / "snapshots" / "rec-legacy-ok.json"
+        snap_file.parent.mkdir(parents=True, exist_ok=True)
+        entry = {
+            "record_id": "rec-legacy-ok",
+            "request": {"action": "fs.write", "target": "/workspace/x.txt", "params": {"content": "hi"}},
+            "snapshot": {"existed": True, "content": "old"},
+            "created_at": time.time(),
+        }
+        snap_file.write_text(json.dumps(entry))
+        loaded = store.load("rec-legacy-ok")
+        assert loaded is not None
+        req, snapshot = loaded
+        assert req.action == "fs.write"
+        assert req.target == "/workspace/x.txt"
+        assert snapshot["content"] == "old"
+
 
 # ---------------------------------------------------------------------------
 # ReversibleActionLayer
@@ -589,3 +624,32 @@ class TestFailureInjection:
             rollback_result = layer.rollback(record_id)
             assert rollback_result.status == "OK"
             assert target.read_text() == "version_1"
+
+    def test_rollback_no_strategy_for_action_type(self, tmp_path):
+        """Rollback fails if no strategy matches the original action type."""
+        log_path = tmp_path / "kernel.log"
+        target = tmp_path / "file.txt"
+
+        with Kernel(
+            policy=_fs_policy(),
+            providers=[FilesystemProvider()],
+            log_path=log_path,
+        ) as k:
+            store = SnapshotStore(tmp_path / "snapshots")
+            # Submit with FsWriteSnapshotStrategy
+            layer_with = ReversibleActionLayer(k, [FsWriteSnapshotStrategy()], store)
+            result = layer_with.submit(
+                ActionRequest(
+                    action="fs.write",
+                    target=str(target),
+                    params={"content": "data"},
+                )
+            )
+            record_id = result.record_id
+            assert record_id is not None
+
+            # Rollback with empty strategies list — no strategy matches
+            layer_without = ReversibleActionLayer(k, [], store)
+            rollback_result = layer_without.rollback(record_id)
+            assert rollback_result.status == "ERROR"
+            assert "no strategy for action type" in rollback_result.error

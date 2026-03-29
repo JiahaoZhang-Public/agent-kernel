@@ -5,7 +5,7 @@ Three components: Policy, Gate, Log
 Three invariants: all access through Gate, default deny, no silent actions
 """
 
-__version__ = "0.4.0"
+__version__ = "0.4.2"
 
 from agent_os_kernel.agent_loop import AgentLoop, ToolDef, run_agent_loop
 from agent_os_kernel.kernel import Kernel

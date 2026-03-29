@@ -1,10 +1,17 @@
 # Agent OS Kernel
+<div align="center">
+
+![Agent OS Kernel](logo.png)
+
+**The world's first Agent OS Kernel.**
 
 [![CI](https://github.com/JiahaoZhang-Public/agent-kernel/actions/workflows/ci.yml/badge.svg)](https://github.com/JiahaoZhang-Public/agent-kernel/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/badge/coverage-96%25-brightgreen)](https://github.com/JiahaoZhang-Public/agent-kernel)
-[![PyPI](https://img.shields.io/badge/version-0.4.0-blue)](https://github.com/JiahaoZhang-Public/agent-kernel/releases)
+[![PyPI](https://img.shields.io/badge/version-0.4.2-blue)](https://github.com/JiahaoZhang-Public/agent-kernel/releases)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+</div>
 
 **A security boundary for LLM agents.** Every tool call an agent makes is authorized by policy, logged immutably, and optionally reversible — enforced at the architecture level, not by convention.
 
@@ -59,7 +66,9 @@ The key difference from wrapper-based approaches: `ToolDef` contains **zero exec
 ## Quick Start
 
 ```bash
-pip install agent-os-kernel
+git clone https://github.com/JiahaoZhang-Public/agent-kernel.git
+cd agent-kernel
+pip install -e .
 ```
 
 ### Direct Kernel Usage

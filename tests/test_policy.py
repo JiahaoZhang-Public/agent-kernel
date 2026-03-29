@@ -37,24 +37,52 @@ class TestCapabilityRule:
         assert rule.constraint_matches(req) is True
 
     def test_constraint_matches_with_matching_param(self):
-        rule = CapabilityRule(action="net.http", resource="https://api.example.com/**", constraint={"method": "GET"})
-        req = ActionRequest(action="net.http", target="https://api.example.com/data", params={"method": "GET"})
+        rule = CapabilityRule(
+            action="net.http",
+            resource="https://api.example.com/**",
+            constraint={"method": "GET"},
+        )
+        req = ActionRequest(
+            action="net.http",
+            target="https://api.example.com/data",
+            params={"method": "GET"},
+        )
         assert rule.constraint_matches(req) is True
 
     def test_constraint_rejects_mismatched_param(self):
-        rule = CapabilityRule(action="net.http", resource="https://api.example.com/**", constraint={"method": "GET"})
-        req = ActionRequest(action="net.http", target="https://api.example.com/data", params={"method": "POST"})
+        rule = CapabilityRule(
+            action="net.http",
+            resource="https://api.example.com/**",
+            constraint={"method": "GET"},
+        )
+        req = ActionRequest(
+            action="net.http",
+            target="https://api.example.com/data",
+            params={"method": "POST"},
+        )
         assert rule.constraint_matches(req) is False
 
     def test_constraint_rejects_missing_param(self):
-        rule = CapabilityRule(action="net.http", resource="https://api.example.com/**", constraint={"method": "GET"})
+        rule = CapabilityRule(
+            action="net.http",
+            resource="https://api.example.com/**",
+            constraint={"method": "GET"},
+        )
         req = ActionRequest(action="net.http", target="https://api.example.com/data", params={})
         assert rule.constraint_matches(req) is False
 
     def test_constraint_multiple_keys(self):
         rule = CapabilityRule(action="net.http", resource="*", constraint={"method": "GET", "timeout": 30})
-        req_ok = ActionRequest(action="net.http", target="http://x", params={"method": "GET", "timeout": 30})
-        req_bad = ActionRequest(action="net.http", target="http://x", params={"method": "GET", "timeout": 60})
+        req_ok = ActionRequest(
+            action="net.http",
+            target="http://x",
+            params={"method": "GET", "timeout": 30},
+        )
+        req_bad = ActionRequest(
+            action="net.http",
+            target="http://x",
+            params={"method": "GET", "timeout": 60},
+        )
         assert rule.constraint_matches(req_ok) is True
         assert rule.constraint_matches(req_bad) is False
 
@@ -88,15 +116,31 @@ class TestPolicy:
         assert policy.is_allowed(req) is False
 
     def test_denies_when_constraint_fails(self):
-        rule = CapabilityRule(action="net.http", resource="https://api.example.com/**", constraint={"method": "GET"})
+        rule = CapabilityRule(
+            action="net.http",
+            resource="https://api.example.com/**",
+            constraint={"method": "GET"},
+        )
         policy = Policy(capabilities=[rule])
-        req = ActionRequest(action="net.http", target="https://api.example.com/data", params={"method": "POST"})
+        req = ActionRequest(
+            action="net.http",
+            target="https://api.example.com/data",
+            params={"method": "POST"},
+        )
         assert policy.is_allowed(req) is False
 
     def test_allows_when_constraint_passes(self):
-        rule = CapabilityRule(action="net.http", resource="https://api.example.com/**", constraint={"method": "GET"})
+        rule = CapabilityRule(
+            action="net.http",
+            resource="https://api.example.com/**",
+            constraint={"method": "GET"},
+        )
         policy = Policy(capabilities=[rule])
-        req = ActionRequest(action="net.http", target="https://api.example.com/data", params={"method": "GET"})
+        req = ActionRequest(
+            action="net.http",
+            target="https://api.example.com/data",
+            params={"method": "GET"},
+        )
         assert policy.is_allowed(req) is True
 
     def test_multiple_rules_first_match_wins(self):
@@ -146,12 +190,20 @@ class TestLoadPolicy:
 
     def test_fixture_net_http_get_allowed(self):
         policy = load_policy("tests/fixtures/test_policy.yaml")
-        req = ActionRequest(action="net.http", target="https://api.example.com/data", params={"method": "GET"})
+        req = ActionRequest(
+            action="net.http",
+            target="https://api.example.com/data",
+            params={"method": "GET"},
+        )
         assert policy.is_allowed(req) is True
 
     def test_fixture_net_http_post_denied(self):
         policy = load_policy("tests/fixtures/test_policy.yaml")
-        req = ActionRequest(action="net.http", target="https://api.example.com/data", params={"method": "POST"})
+        req = ActionRequest(
+            action="net.http",
+            target="https://api.example.com/data",
+            params={"method": "POST"},
+        )
         assert policy.is_allowed(req) is False
 
     def test_load_missing_file_raises(self, tmp_path):

@@ -12,6 +12,7 @@ LLM calls are routed through LiteLLM, supporting 100+ model providers.
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -20,6 +21,8 @@ import litellm
 
 from agent_os_kernel.kernel import Kernel
 from agent_os_kernel.models import ActionRequest, SubmitFn
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -96,22 +99,34 @@ class AgentLoop:
             messages.append({"role": "system", "content": self.instructions})
         messages.append({"role": "user", "content": prompt})
 
-        for _ in range(self.max_turns):
-            response = await litellm.acompletion(
-                model=self.model,
-                messages=messages,
-                tools=self._tool_schemas() if self.tools else None,
-                tool_choice="auto" if self.tools else None,
-            )
+        logger.info("agent_loop.start model=%s max_turns=%d tools=%d", self.model, self.max_turns, len(self.tools))
+
+        for turn in range(self.max_turns):
+            try:
+                response = await litellm.acompletion(
+                    model=self.model,
+                    messages=messages,
+                    tools=self._tool_schemas() if self.tools else None,
+                    tool_choice="auto" if self.tools else None,
+                )
+            except Exception as exc:
+                logger.error("agent_loop.llm_error model=%s turn=%d error=%s", self.model, turn + 1, exc)
+                return f"[LLM error: {exc}]"
+
             choice = response.choices[0]
             message = choice.message
 
             # Terminal: LLM produced final text
             if choice.finish_reason == "stop":
+                logger.info("agent_loop.done model=%s turns_used=%d", self.model, turn + 1)
                 return message.content or ""
 
             # Tool calls: execute each through kernel
             if message.tool_calls:
+                tool_names = [tc.function.name for tc in message.tool_calls]
+                logger.info(
+                    "agent_loop.tool_calls turn=%d count=%d tools=%s", turn + 1, len(message.tool_calls), tool_names
+                )
                 messages.append(message.model_dump())
                 for tc in message.tool_calls:
                     result = self._execute_tool_call(tc)
@@ -125,8 +140,10 @@ class AgentLoop:
                 continue
 
             # Unexpected finish reason (e.g. length) — return whatever we have
+            logger.warning("agent_loop.unexpected_finish turn=%d reason=%s", turn + 1, choice.finish_reason)
             return message.content or ""
 
+        logger.warning("agent_loop.max_turns model=%s max_turns=%d", self.model, self.max_turns)
         return "[max turns reached]"
 
     def _execute_tool_call(self, tool_call: Any) -> str:
@@ -182,6 +199,7 @@ async def run_agent_loop(
     instructions: str = "",
     tools: list[ToolDef] | None = None,
     max_turns: int = 20,
+    submit: SubmitFn | None = None,
 ) -> str:
     """Convenience function: create an AgentLoop and run it.
 
@@ -192,6 +210,8 @@ async def run_agent_loop(
         instructions: System prompt for the LLM.
         tools: List of ToolDefs.
         max_turns: Maximum LLM call iterations.
+        submit: Optional override for the submit callable. Defaults to
+            kernel.submit(). Use this for ReversibleActionLayer integration.
 
     Returns:
         The agent's final text output.
@@ -202,5 +222,6 @@ async def run_agent_loop(
         instructions=instructions,
         tools=tools,
         max_turns=max_turns,
+        submit=submit,
     )
     return await loop.run(prompt)
