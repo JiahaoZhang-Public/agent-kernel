@@ -60,6 +60,7 @@ The key difference from wrapper-based approaches: `ToolDef` contains **zero exec
 - **100+ LLM providers** — LiteLLM-powered: OpenAI, Anthropic, Ollama, Azure, and more
 - **CLI** — `submit`, `log`, `validate-policy`, `version`
 - **High throughput** — 77,000+ ops/s, p99 < 0.1 ms
+- **Minimal core** — ~1,600 lines of kernel source code; small enough to audit, complete enough to enforce
 
 ---
 
