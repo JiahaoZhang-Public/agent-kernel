@@ -20,6 +20,8 @@ dev = [
     "mypy>=1.10",
     "pre-commit>=3.7",
     "types-PyYAML>=6.0",
+    "build>=1.0",
+    "twine>=5.0",
 ]
 test = [
     "pytest>=8.0",
@@ -29,6 +31,34 @@ docs = [
     "mkdocs-material>=9.5",
     "mkdocstrings[python]>=0.25",
 ]
+
+[project.urls]
+Homepage = "https://github.com/JiahaoZhang-Public/agent-kernel"
+Repository = "https://github.com/JiahaoZhang-Public/agent-kernel"
+Documentation = "https://github.com/JiahaoZhang-Public/agent-kernel#readme"
+Changelog = "https://github.com/JiahaoZhang-Public/agent-kernel/blob/main/docs/user/changelog.md"
+
+[project.scripts]
+agent-kernel = "agent_os_kernel.__main__:main"
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "docs/research/",
+    "docs/site/",
+    "docs/user/",
+    "docs/mkdocs.yml",
+    "scripts/",
+    "tests/",
+    "examples/",
+    ".github/",
+    ".claude/",
+    ".pre-commit-config.yaml",
+    "logo.png",
+    "uv.lock",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agent_os_kernel"]
 
 [tool.ruff]
 line-length = 120
