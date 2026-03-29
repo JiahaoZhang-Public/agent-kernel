@@ -25,8 +25,8 @@ nav:
   - Getting Started:
       - Installation: getting-started/installation.md
       - Quickstart: getting-started/quickstart.md
-  - Guides: guides/
-  - API Reference: api/
+  - Guides: guides/index.md
+  - API Reference: api/index.md
   - Changelog: changelog.md
 
 markdown_extensions:
