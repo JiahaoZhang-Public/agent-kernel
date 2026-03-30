@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1080">
+<title>Agent OS Kernel — Architecture</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    background: #f0f0f0;
+    font-family: 'PingFang SC', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  }
+
+  .diagram {
+    width: 1080px;
+    height: 1440px;
+    background: #ffffff;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    padding: 60px 50px 50px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  }
+
+  /* Header section */
+  .header {
+    text-align: center;
+    margin-bottom: 8px;
+  }
+
+  .title {
+    font-size: 36px;
+    font-weight: 700;
+    color: #334155;
+    letter-spacing: 2px;
+  }
+  .title span { color: #166534; }
+
+  .subtitle {
+    font-size: 20px;
+    color: #64748b;
+    margin-top: 12px;
+    font-weight: 400;
+  }
+
+  /* Concentric layers */
+  .layers {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 20px 0;
+  }
+
+  .layer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .layer-label {
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .layer-sublabel {
+    font-weight: 400;
+    letter-spacing: 0.3px;
+    opacity: 0.75;
+  }
+
+  .world {
+    border: 3px dashed #9333ea;
+    background: #f2e8ef;
+    padding: 30px 40px 28px;
+    border-radius: 28px;
+    width: 94%;
+  }
+  .world > .layer-header { align-self: flex-end; margin-bottom: 16px; }
+  .world .layer-label { color: #7e22ce; font-size: 18px; }
+  .world .layer-sublabel { color: #7e22ce; font-size: 15px; }
+
+  .providers {
+    border: 3px dashed #3b82f6;
+    background: #e4edf9;
+    padding: 26px 36px 24px;
+    border-radius: 24px;
+    width: 100%;
+  }
+  .providers > .layer-header { align-self: flex-end; margin-bottom: 14px; }
+  .providers .layer-label { color: #1e40af; font-size: 18px; }
+  .providers .layer-sublabel { color: #1e40af; font-size: 15px; }
+
+  .gate {
+    border: 3px solid #166534;
+    background: #dfeee8;
+    padding: 28px 34px 26px;
+    border-radius: 20px;
+    width: 100%;
+  }
+  .gate > .layer-header { text-align: center; margin-bottom: 18px; }
+  .gate .layer-label { color: #166534; font-size: 22px; }
+
+  .agent {
+    border: 3px dashed #b45309;
+    background: #fffaf0;
+    padding: 20px 36px;
+    border-radius: 14px;
+  }
+  .agent .layer-label { color: #b45309; font-size: 20px; }
+
+  .chips { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+
+  .chip {
+    background: #ffffff;
+    border-radius: 10px;
+    padding: 10px 24px;
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+  }
+
+  .chip-agent { border: 2px solid #d4a574; color: #92400e; }
+  .chip-gate { border: 2px solid #166534; color: #166534; }
+
+  .gate-chips { display: flex; gap: 14px; justify-content: center; margin-bottom: 20px; }
+
+  /* Invariants - vertical for portrait layout */
+  .invariants {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    width: 80%;
+    padding: 32px 0 0;
+    border-top: 1.5px solid #e2e8f0;
+  }
+
+  .invariant-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-size: 20px;
+  }
+
+  .invariant-icon { font-size: 24px; }
+
+  .invariant-title {
+    color: #334155;
+    font-weight: 700;
+  }
+
+  .invariant-desc {
+    color: #64748b;
+    font-weight: 400;
+    font-size: 16px;
+  }
+
+  .layer-header { display: flex; align-items: baseline; gap: 10px; }
+
+  /* Footer */
+  .footer {
+    margin-top: 20px;
+    text-align: center;
+    color: #94a3b8;
+    font-size: 15px;
+    letter-spacing: 0.5px;
+  }
+  .footer a {
+    color: #3b82f6;
+    text-decoration: none;
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<div class="diagram">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="title">AGENT OS KERNEL</div>
+    <div class="title"><span>Architecture</span></div>
+    <div class="subtitle">LLM Agent 安全内核 · 架构总览</div>
+  </div>
+
+  <!-- Concentric Layers -->
+  <div class="layers">
+    <div class="layer world">
+      <div class="layer-header">
+        <span class="layer-label">World</span>
+        <span class="layer-sublabel">&ensp;文件 &middot; API &middot; 数据库</span>
+      </div>
+      <div class="layer providers">
+        <div class="layer-header">
+          <span class="layer-label">Providers</span>
+          <span class="layer-sublabel">&ensp;文件系统 &middot; HTTP &middot; MCP &middot; 进程</span>
+        </div>
+        <div class="layer gate">
+          <div class="layer-header" style="justify-content:center;">
+            <span class="layer-label">Kernel&ensp;(Gate)</span>
+          </div>
+          <div class="gate-chips">
+            <div class="chip chip-gate">策略引擎</div>
+            <div class="chip chip-gate">kernel.submit()</div>
+            <div class="chip chip-gate">审计日志</div>
+          </div>
+          <div class="layer agent" style="align-self:center;">
+            <div style="display:flex;align-items:center;gap:20px;">
+              <span class="layer-label">Agent</span>
+              <div class="chips">
+                <div class="chip chip-agent">LLM</div>
+                <div class="chip chip-agent">ToolDef</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Invariants - vertical with Chinese descriptions -->
+  <div class="invariants">
+    <div class="invariant-row">
+      <span class="invariant-icon">&#128274;</span>
+      <span class="invariant-title">所有访问必经 Gate</span>
+      <span class="invariant-desc">— kernel.submit() 是唯一执行路径</span>
+    </div>
+    <div class="invariant-row">
+      <span class="invariant-icon">&#128683;</span>
+      <span class="invariant-title">默认拒绝</span>
+      <span class="invariant-desc">— 未在策略中允许的操作一律阻止</span>
+    </div>
+    <div class="invariant-row">
+      <span class="invariant-icon">&#128221;</span>
+      <span class="invariant-title">无静默操作</span>
+      <span class="invariant-desc">— 每个决策都不可篡改地记录在日志中</span>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    pip install py-agent-kernel &ensp;|&ensp; github.com/JiahaoZhang-Public/agent-kernel
+  </div>
+
+</div>
+
+</body>
+</html>

@@ -1,7 +1,7 @@
 # Agent OS Kernel
 <div align="center">
 
-![Agent OS Kernel](logo.png)
+![Agent OS Kernel](logo_cartoon.png)
 
 **A security kernel for LLM agents.**
 
