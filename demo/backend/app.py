@@ -19,6 +19,8 @@ from demo.backend.runtime import (
     DemoWorld,
     LLMConfig,
     OpenAICompatiblePlanner,
+    clear_snapshots,
+    kernel_rollback,
     kernel_submit,
     records_as_dicts,
     request_to_dict,
@@ -49,6 +51,11 @@ class LLMTestRequest(BaseModel):
     api_key: str | None = Field(default=None, alias="apiKey")
     base_url: str | None = Field(default=None, alias="baseUrl")
     model: str | None = None
+
+
+class RollbackRequest(BaseModel):
+    record_id: str = Field(alias="recordId")
+    policy_yaml: str = Field(alias="policyYaml")
 
 
 app = FastAPI(title="Agent Kernel Workbench Demo")
@@ -91,6 +98,7 @@ def reset_world() -> dict[str, Any]:
     demo_world.reset()
     if log_path.exists():
         log_path.unlink()
+    clear_snapshots()
     return {"world": demo_world.snapshot(), "logs": []}
 
 
@@ -125,6 +133,25 @@ async def test_llm_config(payload: LLMTestRequest) -> dict[str, Any]:
         LLMConfig(api_key=payload.api_key, base_url=payload.base_url, model=payload.model)
     )
     return await planner.test_connection()
+
+
+@app.post("/api/kernel/rollback")
+def rollback_action(payload: RollbackRequest) -> dict[str, Any]:
+    try:
+        result, record = kernel_rollback(
+            world=demo_world,
+            policy_yaml=payload.policy_yaml,
+            log_path=log_path,
+            record_id=payload.record_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return {
+        "result": result_to_dict(result),
+        "record": record,
+        "world": demo_world.snapshot(),
+    }
 
 
 @app.post("/api/runs")

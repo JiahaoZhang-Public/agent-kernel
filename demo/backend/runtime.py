@@ -27,6 +27,11 @@ from agent_os_kernel.log import Log
 from agent_os_kernel.models import ActionRequest, ActionResult, Record
 from agent_os_kernel.policy import CapabilityRule, Policy
 from agent_os_kernel.providers.base import Provider
+from agent_os_kernel.reversible import (
+    ReversibleActionLayer,
+    SnapshotStore,
+    SnapshotStrategy,
+)
 
 DEFAULT_POLICY_YAML = """capabilities:
   - action: db.read
@@ -126,6 +131,20 @@ class DemoDatabaseProvider(Provider):
         if request.action == "db.read":
             return {"table": request.target, "rows": copy.deepcopy(table["rows"]), "dropped": table["dropped"]}
 
+        # Reversible-rollback restore branch — short-circuits before SQL parsing
+        # so the rollback layer can deterministically reinstate prior rows.
+        if request.params.get("__restore__"):
+            rows = request.params.get("rows", [])
+            dropped = bool(request.params.get("dropped", False))
+            table["rows"] = copy.deepcopy(rows)
+            table["dropped"] = dropped
+            return {
+                "operation": "RESTORE",
+                "table": request.target,
+                "rowsAffected": len(rows),
+                "dropped": dropped,
+            }
+
         sql = str(request.params.get("sql", "")).upper()
         if "DROP TABLE" in sql:
             rows_affected = len(table["rows"])
@@ -199,6 +218,57 @@ def make_providers(world: DemoWorld) -> list[Provider]:
     return [DemoDatabaseProvider(world), DemoMcpProvider(world), DemoHttpProvider(world)]
 
 
+class DemoDbWriteSnapshotStrategy(SnapshotStrategy):
+    """Capture DemoWorld table state before a db.write so the action is reversible.
+
+    Restoration goes back through the kernel via a special ``__restore__`` param
+    in ``DemoDatabaseProvider.execute`` — keeping the rollback path Gate-mediated
+    and audit-logged like any other action (per v2.1 §7).
+    """
+
+    def __init__(self, world: DemoWorld) -> None:
+        self.world = world
+
+    def supports(self, request: ActionRequest) -> bool:
+        return request.action == "db.write"
+
+    def capture(self, request: ActionRequest) -> dict[str, Any]:
+        table = self.world.tables.get(request.target, {"dropped": False, "rows": []})
+        return {
+            "target": request.target,
+            "rows": copy.deepcopy(table.get("rows", [])),
+            "dropped": bool(table.get("dropped", False)),
+        }
+
+    def restore(self, request: ActionRequest, snapshot: dict[str, Any]) -> ActionRequest:
+        return ActionRequest(
+            action="db.write",
+            target=snapshot["target"],
+            params={
+                "__restore__": True,
+                "rows": snapshot["rows"],
+                "dropped": snapshot["dropped"],
+            },
+        )
+
+
+SNAPSHOT_STORE_DIR = Path("demo/runtime/snapshots")
+_snapshot_store: SnapshotStore | None = None
+
+
+def get_snapshot_store() -> SnapshotStore:
+    global _snapshot_store
+    if _snapshot_store is None:
+        _snapshot_store = SnapshotStore(SNAPSHOT_STORE_DIR, ttl_seconds=3600)
+    return _snapshot_store
+
+
+def clear_snapshots() -> None:
+    if SNAPSHOT_STORE_DIR.exists():
+        for path in SNAPSHOT_STORE_DIR.glob("*.json"):
+            path.unlink(missing_ok=True)
+
+
 def policy_from_yaml(policy_yaml: str) -> Policy:
     data = yaml.safe_load(policy_yaml)
     if not isinstance(data, dict) or not isinstance(data.get("capabilities"), list):
@@ -235,7 +305,12 @@ def record_to_dict(record: Record) -> dict[str, Any]:
 
 
 def result_to_dict(result: ActionResult) -> dict[str, Any]:
-    return {"status": result.status, "data": result.data, "error": result.error}
+    return {
+        "status": result.status,
+        "data": result.data,
+        "error": result.error,
+        "record_id": result.record_id,
+    }
 
 
 def request_to_dict(request: ActionRequest) -> dict[str, Any]:
@@ -253,10 +328,53 @@ def kernel_submit(
     policy_yaml: str,
     log_path: Path,
     request: ActionRequest,
+    reversible: bool = True,
 ) -> tuple[ActionResult, dict[str, Any] | None]:
-    kernel = Kernel(policy=policy_from_yaml(policy_yaml), providers=make_providers(world), log_path=log_path)
+    """Submit a request through the kernel.
+
+    When ``reversible=True`` (default), wraps the kernel in a
+    ``ReversibleActionLayer`` so eligible actions (currently ``db.write``)
+    populate ``result.record_id`` for one-click rollback.
+    """
+    kernel = Kernel(
+        policy=policy_from_yaml(policy_yaml),
+        providers=make_providers(world),
+        log_path=log_path,
+    )
     try:
-        result = kernel.submit(request)
+        if reversible:
+            layer = ReversibleActionLayer(
+                kernel=kernel,
+                strategies=[DemoDbWriteSnapshotStrategy(world)],
+                store=get_snapshot_store(),
+            )
+            result = layer.submit(request)
+        else:
+            result = kernel.submit(request)
+    finally:
+        kernel.close()
+    return result, last_record(log_path)
+
+
+def kernel_rollback(
+    *,
+    world: DemoWorld,
+    policy_yaml: str,
+    log_path: Path,
+    record_id: str,
+) -> tuple[ActionResult, dict[str, Any] | None]:
+    kernel = Kernel(
+        policy=policy_from_yaml(policy_yaml),
+        providers=make_providers(world),
+        log_path=log_path,
+    )
+    try:
+        layer = ReversibleActionLayer(
+            kernel=kernel,
+            strategies=[DemoDbWriteSnapshotStrategy(world)],
+            store=get_snapshot_store(),
+        )
+        result = layer.rollback(record_id)
     finally:
         kernel.close()
     return result, last_record(log_path)
@@ -571,6 +689,7 @@ async def stream_scenario(
             request=request_to_dict(request),
             result=result_to_dict(result),
             record=record,
+            record_id=result.record_id,
             world=kernel_world.snapshot(),
             payloads=[
                 {"label": "Tool output", "value": result_to_dict(result)},
@@ -607,6 +726,7 @@ async def stream_scenario(
                     request=request_to_dict(fixed),
                     result=result_to_dict(fixed_result),
                     record=fixed_record,
+                    record_id=fixed_result.record_id,
                     world=kernel_world.snapshot(),
                     payloads=[
                         {"label": "Tool output", "value": result_to_dict(fixed_result)},
@@ -716,6 +836,7 @@ async def stream_llm_scenario(
         request=request_to_dict(request),
         result=result_to_dict(result),
         record=record,
+        record_id=result.record_id,
         world=kernel_world.snapshot(),
         payloads=[
             {"label": "Tool output", "value": result_to_dict(result)},
@@ -778,6 +899,7 @@ async def stream_llm_scenario(
             request=request_to_dict(fixed),
             result=result_to_dict(fixed_result),
             record=fixed_record,
+            record_id=fixed_result.record_id,
             world=kernel_world.snapshot(),
             payloads=[
                 {"label": "Tool output", "value": result_to_dict(fixed_result)},
