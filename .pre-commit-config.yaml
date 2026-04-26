@@ -21,4 +21,4 @@ repos:
       - id: mypy
         additional_dependencies: [types-PyYAML, exceptiongroup, tomli]
         args: [--config-file=pyproject.toml, --ignore-missing-imports]
-        exclude: ^tests/
+        exclude: ^(tests/|demo/)
