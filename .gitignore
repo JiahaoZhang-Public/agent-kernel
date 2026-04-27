@@ -38,6 +38,13 @@ htmlcov/
 # Docs build
 docs/site/
 
+# Demo runtime and frontend artifacts
+demo/runtime/
+demo/frontend/node_modules/
+demo/frontend/dist/
+demo/frontend/.vite/
+*.tsbuildinfo
+
 # ML artifacts — large files, do NOT commit
 data/
 outputs/

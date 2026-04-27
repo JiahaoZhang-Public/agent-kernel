@@ -1,7 +1,7 @@
 # Agent OS Kernel
 <div align="center">
 
-![Agent OS Kernel](logo.png)
+![Agent OS Kernel](logo_cartoon.png)
 
 **A security kernel for LLM agents.**
 
@@ -155,6 +155,31 @@ uv run python examples/01_basic_kernel/hello_kernel.py
 # LLM examples need an API key
 OPENAI_API_KEY=sk-... uv run python examples/03_agent_loop/file_analyst.py
 ```
+
+---
+
+## Interactive Workbench Demo
+
+The repository includes a browser demo that shows a user prompt, raw LLM output,
+agent tool calls, provider output, Gate decisions, and append-only audit records.
+It contrasts a naive runtime with a kernel-mediated runtime in a dangerous DB
+cleanup scenario.
+
+```bash
+# Backend
+uv sync --all-extras
+uv pip install -r demo/backend/requirements.txt
+uv run uvicorn demo.backend.app:app --host 127.0.0.1 --port 8000
+
+# Frontend
+cd demo/frontend
+npm install
+npm run dev
+```
+
+Open <http://127.0.0.1:5173>. See [`demo/README.md`](demo/README.md) and
+[`docs/agent-kernel-workbench-demo.md`](docs/agent-kernel-workbench-demo.md) for
+the full walkthrough.
 
 ---
 
