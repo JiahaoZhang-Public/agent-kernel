@@ -1,0 +1,850 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Agent OS Kernel — A security boundary for LLM agents</title>
+    <meta
+      name="description"
+      content="A minimal, auditable security kernel for LLM agents. Every tool call is policy-checked, immutably logged, and optionally reversible — enforced structurally, not by convention."
+    />
+    <meta property="og:title" content="Agent OS Kernel" />
+    <meta
+      property="og:description"
+      content="A security boundary for LLM agents. Policy → execute → audit, on every action."
+    />
+    <meta property="og:image" content="./assets/architecture.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <link rel="icon" type="image/png" href="./assets/logo.png" />
+
+    <link rel="preconnect" href="https://rsms.me/" />
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono/web/woff2/JetBrainsMono.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github.min.css"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/languages/python.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/languages/yaml.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/languages/bash.min.js"></script>
+
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: [
+                "Inter",
+                "ui-sans-serif",
+                "system-ui",
+                "-apple-system",
+                "BlinkMacSystemFont",
+                "Segoe UI",
+                "sans-serif",
+              ],
+              mono: [
+                "JetBrains Mono",
+                "SFMono-Regular",
+                "Menlo",
+                "Consolas",
+                "monospace",
+              ],
+            },
+            colors: {
+              ink: "#0f172a",
+              "ink-soft": "#1f2937",
+              muted: "#6b7280",
+              line: "#e2e6ec",
+              "soft-bg": "#f8fafd",
+              brand: {
+                DEFAULT: "#4f46e5",
+                soft: "#eef2ff",
+                deep: "#3730a3",
+              },
+              kernel: {
+                DEFAULT: "#0d9b6c",
+                soft: "#dcfce7",
+              },
+              naive: {
+                DEFAULT: "#dc2626",
+                soft: "#fee2e2",
+              },
+              warn: { DEFAULT: "#d97706", soft: "#fef3c7" },
+            },
+            keyframes: {
+              floaty: {
+                "0%, 100%": { transform: "translateY(0)" },
+                "50%": { transform: "translateY(-6px)" },
+              },
+              shimmer: {
+                "0%": { backgroundPosition: "-200% 0" },
+                "100%": { backgroundPosition: "200% 0" },
+              },
+            },
+            animation: {
+              floaty: "floaty 4s ease-in-out infinite",
+              shimmer: "shimmer 6s linear infinite",
+            },
+          },
+        },
+      };
+    </script>
+
+    <style>
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        font-feature-settings: "cv11", "ss01", "ss03";
+      }
+      .grid-bg {
+        background-image:
+          linear-gradient(to right, rgba(15, 23, 42, 0.04) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(15, 23, 42, 0.04) 1px, transparent 1px);
+        background-size: 56px 56px;
+      }
+      .glow-ring {
+        box-shadow:
+          0 30px 80px -40px rgba(79, 70, 229, 0.5),
+          0 6px 20px -4px rgba(15, 23, 42, 0.06);
+      }
+      .gradient-text {
+        background: linear-gradient(120deg, #4f46e5 0%, #0d9b6c 60%, #4f46e5 100%);
+        background-size: 200% auto;
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        animation: shimmer 8s linear infinite;
+      }
+      pre code.hljs {
+        background: transparent !important;
+        padding: 0 !important;
+        font-family: theme("fontFamily.mono");
+        font-size: 0.78rem;
+        line-height: 1.55;
+      }
+      .code-card {
+        background: #0f172a;
+        color: #e2e8f0;
+      }
+      .code-card .hljs-keyword {
+        color: #93c5fd;
+      }
+      .code-card .hljs-string {
+        color: #86efac;
+      }
+      .code-card .hljs-comment {
+        color: #94a3b8;
+      }
+      .code-card .hljs-number {
+        color: #fde68a;
+      }
+      .lane-rail {
+        position: relative;
+      }
+      .lane-rail::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 4px;
+        border-radius: 2px;
+      }
+      .lane-naive::before {
+        background: #dc2626;
+      }
+      .lane-kernel::before {
+        background: #0d9b6c;
+      }
+      .scroll-fade > * {
+        opacity: 0;
+        transform: translateY(8px);
+        transition:
+          opacity 600ms ease-out,
+          transform 600ms ease-out;
+      }
+      .scroll-fade.in > * {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    </style>
+  </head>
+  <body class="bg-soft-bg text-ink antialiased">
+    <!-- Top navigation -->
+    <header class="sticky top-0 z-40 border-b border-line bg-white/85 backdrop-blur">
+      <div class="mx-auto flex h-14 max-w-6xl items-center gap-4 px-4 md:px-6">
+        <a href="#top" class="flex items-center gap-2">
+          <span class="grid h-7 w-7 place-items-center rounded-md bg-brand-soft text-brand">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="M12 2 4 6v6c0 5 3.5 9.5 8 10 4.5-.5 8-5 8-10V6Z"/></svg>
+          </span>
+          <span class="text-sm font-semibold tracking-tight">Agent OS Kernel</span>
+        </a>
+        <nav class="ml-auto hidden items-center gap-6 text-sm md:flex">
+          <a href="#why" class="text-ink-soft hover:text-brand">Why</a>
+          <a href="#invariants" class="text-ink-soft hover:text-brand">Invariants</a>
+          <a href="#workbench" class="text-ink-soft hover:text-brand">Workbench</a>
+          <a href="#install" class="text-ink-soft hover:text-brand">Install</a>
+          <a
+            href="https://agent-kernel.readthedocs.io/en/latest/"
+            target="_blank"
+            rel="noopener"
+            class="text-ink-soft hover:text-brand"
+            >Docs</a
+          >
+        </nav>
+        <a
+          href="https://github.com/JiahaoZhang-Public/agent-kernel"
+          target="_blank"
+          rel="noopener"
+          class="inline-flex items-center gap-1.5 rounded-md border border-line bg-white px-3 py-1.5 text-xs font-medium hover:bg-soft-bg"
+        >
+          <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56v-1.97c-3.2.7-3.87-1.54-3.87-1.54-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.75 2.68 1.24 3.34.95.1-.74.4-1.24.72-1.52-2.55-.29-5.23-1.27-5.23-5.66 0-1.25.45-2.27 1.18-3.07-.12-.29-.51-1.46.11-3.04 0 0 .96-.31 3.15 1.17a10.94 10.94 0 0 1 5.74 0c2.19-1.48 3.15-1.17 3.15-1.17.62 1.58.23 2.75.11 3.04.74.8 1.18 1.82 1.18 3.07 0 4.4-2.69 5.36-5.25 5.65.41.36.78 1.06.78 2.13v3.16c0 .31.21.68.79.56A11.53 11.53 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5Z"/></svg>
+          GitHub
+        </a>
+      </div>
+    </header>
+
+    <!-- Hero -->
+    <section id="top" class="relative overflow-hidden">
+      <div class="absolute inset-0 grid-bg opacity-60"></div>
+      <div
+        aria-hidden="true"
+        class="absolute -top-24 right-0 h-[420px] w-[420px] rounded-full bg-brand/10 blur-3xl"
+      ></div>
+      <div
+        aria-hidden="true"
+        class="absolute -bottom-32 -left-20 h-[420px] w-[420px] rounded-full bg-kernel/10 blur-3xl"
+      ></div>
+      <div class="relative mx-auto max-w-6xl px-4 py-20 md:px-6 md:py-28">
+        <div class="grid items-center gap-10 md:grid-cols-2 md:gap-14">
+          <div>
+            <div class="inline-flex items-center gap-2 rounded-full border border-brand/30 bg-brand-soft px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-brand">
+              <span class="h-1.5 w-1.5 rounded-full bg-brand"></span>
+              v0.4.3 · py-agent-kernel on PyPI
+            </div>
+            <h1 class="mt-5 text-4xl font-semibold leading-tight tracking-tight text-ink md:text-5xl">
+              A security <span class="gradient-text">boundary</span><br />
+              for LLM agents.
+            </h1>
+            <p class="mt-5 max-w-xl text-base leading-relaxed text-ink-soft md:text-lg">
+              Every tool call an agent makes is authorized by policy, logged
+              immutably, and optionally reversible — enforced at the architecture
+              level, not by convention.
+            </p>
+            <div class="mt-7 flex flex-wrap items-center gap-3">
+              <a
+                href="#install"
+                class="inline-flex items-center gap-2 rounded-md bg-brand px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-brand-deep"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
+                Install
+              </a>
+              <a
+                href="https://github.com/JiahaoZhang-Public/agent-kernel"
+                target="_blank"
+                rel="noopener"
+                class="inline-flex items-center gap-2 rounded-md border border-line bg-white px-4 py-2.5 text-sm font-medium hover:bg-soft-bg"
+              >
+                <svg viewBox="0 0 24 24" class="h-4 w-4" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56v-1.97c-3.2.7-3.87-1.54-3.87-1.54-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.75 2.68 1.24 3.34.95.1-.74.4-1.24.72-1.52-2.55-.29-5.23-1.27-5.23-5.66 0-1.25.45-2.27 1.18-3.07-.12-.29-.51-1.46.11-3.04 0 0 .96-.31 3.15 1.17a10.94 10.94 0 0 1 5.74 0c2.19-1.48 3.15-1.17 3.15-1.17.62 1.58.23 2.75.11 3.04.74.8 1.18 1.82 1.18 3.07 0 4.4-2.69 5.36-5.25 5.65.41.36.78 1.06.78 2.13v3.16c0 .31.21.68.79.56A11.53 11.53 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5Z"/></svg>
+                Star on GitHub
+              </a>
+              <a
+                href="https://agent-kernel.readthedocs.io/en/latest/"
+                target="_blank"
+                rel="noopener"
+                class="inline-flex items-center gap-2 text-sm font-medium text-brand hover:underline"
+              >
+                Read the docs →
+              </a>
+            </div>
+            <dl class="mt-10 grid max-w-md grid-cols-3 gap-4 text-center">
+              <div class="rounded-lg border border-line bg-white px-3 py-3">
+                <dt class="text-[11px] font-medium uppercase tracking-wide text-muted">
+                  Throughput
+                </dt>
+                <dd class="mt-0.5 text-base font-semibold tabular-nums">77K ops/s</dd>
+              </div>
+              <div class="rounded-lg border border-line bg-white px-3 py-3">
+                <dt class="text-[11px] font-medium uppercase tracking-wide text-muted">
+                  p99 latency
+                </dt>
+                <dd class="mt-0.5 text-base font-semibold tabular-nums">&lt; 0.1 ms</dd>
+              </div>
+              <div class="rounded-lg border border-line bg-white px-3 py-3">
+                <dt class="text-[11px] font-medium uppercase tracking-wide text-muted">
+                  Coverage
+                </dt>
+                <dd class="mt-0.5 text-base font-semibold tabular-nums">96 %</dd>
+              </div>
+            </dl>
+          </div>
+
+          <!-- Hero illustration: stylised kernel diagram -->
+          <div class="relative">
+            <div class="glow-ring rounded-2xl border border-line bg-white p-5 shadow-xl">
+              <div class="flex items-center justify-between border-b border-line pb-3">
+                <div class="flex items-center gap-2">
+                  <div class="grid h-7 w-7 place-items-center rounded-md bg-brand/10 text-brand">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="M12 2 4 6v6c0 5 3.5 9.5 8 10 4.5-.5 8-5 8-10V6Z"/></svg>
+                  </div>
+                  <div>
+                    <div class="text-xs font-semibold tracking-tight">Workbench</div>
+                    <div class="text-[10px] uppercase tracking-wide text-muted">naive vs kernel</div>
+                  </div>
+                </div>
+                <div class="flex items-center gap-1.5 text-[10px]">
+                  <span class="inline-block h-1.5 w-1.5 rounded-full bg-kernel"></span>
+                  <span class="text-muted">Run done · 86 ms</span>
+                </div>
+              </div>
+
+              <div class="mt-4 grid grid-cols-3 gap-2 text-center">
+                <div class="rounded-md border-l-4 border-naive/80 bg-soft-bg px-2 py-2">
+                  <div class="text-[9px] font-medium uppercase tracking-wide text-muted">Blocked</div>
+                  <div class="text-xl font-semibold tabular-nums">1</div>
+                </div>
+                <div class="rounded-md border-l-4 border-brand/70 bg-soft-bg px-2 py-2">
+                  <div class="text-[9px] font-medium uppercase tracking-wide text-muted">Audited</div>
+                  <div class="text-xl font-semibold tabular-nums">2</div>
+                </div>
+                <div class="rounded-md border-l-4 border-kernel/80 bg-soft-bg px-2 py-2">
+                  <div class="text-[9px] font-medium uppercase tracking-wide text-muted">Δ rows</div>
+                  <div class="text-xl font-semibold tabular-nums text-kernel">+1</div>
+                </div>
+              </div>
+
+              <!-- mini-gantt -->
+              <div class="mt-5 space-y-3">
+                <div class="lane-rail lane-naive pl-3">
+                  <div class="text-[10px] font-medium uppercase tracking-wide text-muted">Naive</div>
+                  <div class="mt-1 flex h-3 items-center gap-0.5 rounded bg-soft-bg p-0.5">
+                    <span class="block h-2 w-3 rounded bg-muted/60"></span>
+                    <span class="block h-2 w-20 rounded bg-naive"></span>
+                  </div>
+                </div>
+                <div class="lane-rail lane-kernel pl-3">
+                  <div class="text-[10px] font-medium uppercase tracking-wide text-muted">Kernel</div>
+                  <div class="mt-1 flex h-3 items-center gap-0.5 rounded bg-soft-bg p-0.5">
+                    <span class="block h-2 w-3 rounded bg-muted/60"></span>
+                    <span class="block h-2 w-10 rounded bg-naive"></span>
+                    <span class="block h-2 w-3 rounded bg-muted/60"></span>
+                    <span class="block h-2 w-3 rounded bg-muted/60"></span>
+                    <span class="block h-2 w-6 rounded bg-kernel"></span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="mt-4 grid grid-cols-2 gap-2 text-[10px]">
+                <div class="rounded-md border border-line bg-soft-bg p-2">
+                  <div class="font-medium text-naive">DROP TABLE prod/users</div>
+                  <div class="mt-0.5 text-muted">Naive: succeeded · 3 rows lost</div>
+                </div>
+                <div class="rounded-md border border-line bg-soft-bg p-2">
+                  <div class="font-medium text-kernel">Gate: DENIED</div>
+                  <div class="mt-0.5 text-muted">No matching rule. Default-deny.</div>
+                </div>
+              </div>
+            </div>
+            <div
+              aria-hidden="true"
+              class="pointer-events-none absolute -bottom-3 left-1/2 h-2 w-3/4 -translate-x-1/2 rounded-full bg-brand/20 blur-md"
+            ></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Why -->
+    <section id="why" class="relative">
+      <div class="mx-auto max-w-6xl px-4 py-20 md:px-6 md:py-24">
+        <div class="grid items-start gap-10 md:grid-cols-3">
+          <div class="md:col-span-1">
+            <p class="text-[11px] font-semibold uppercase tracking-wider text-brand">
+              The problem
+            </p>
+            <h2 class="mt-2 text-3xl font-semibold tracking-tight">
+              Wrappers are convention. <br />
+              <span class="text-muted">Kernels are structure.</span>
+            </h2>
+          </div>
+          <div class="md:col-span-2 space-y-5 text-base leading-relaxed text-ink-soft">
+            <p>
+              When you give an LLM access to tools, nothing enforces what it can
+              actually do. The agent may misread instructions, be manipulated by
+              prompt injection, or simply make a mistake — and there is no layer
+              between it and the real world.
+            </p>
+            <p>
+              Most agent SDKs let you wrap a tool with a check. But wrappers can
+              be <em>forgotten</em>, <em>skipped</em>, or
+              <em>quietly bypassed</em>. The Agent OS Kernel makes the Gate
+              <strong>the only path</strong> to an action — there is no
+              alternative function to call.
+            </p>
+            <div class="grid gap-3 sm:grid-cols-2">
+              <div class="rounded-lg border-l-4 border-naive bg-naive-soft/40 p-4">
+                <div class="text-[11px] font-semibold uppercase tracking-wide text-naive">
+                  Without a kernel
+                </div>
+                <p class="mt-1.5 text-sm text-ink">
+                  A misread prompt runs <code class="rounded bg-white px-1 py-0.5 font-mono text-xs">DROP TABLE users</code>.
+                  No record of what was attempted, no rollback path, no scope
+                  limit on the blast radius.
+                </p>
+              </div>
+              <div class="rounded-lg border-l-4 border-kernel bg-kernel-soft/40 p-4">
+                <div class="text-[11px] font-semibold uppercase tracking-wide text-kernel">
+                  With the kernel
+                </div>
+                <p class="mt-1.5 text-sm text-ink">
+                  The same call is matched against policy → denied or allowed →
+                  written to an append-only log. Reversible writes can be undone
+                  in one call.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Invariants -->
+    <section id="invariants" class="relative bg-white">
+      <div class="mx-auto max-w-6xl px-4 py-20 md:px-6 md:py-24">
+        <div class="max-w-3xl">
+          <p class="text-[11px] font-semibold uppercase tracking-wider text-brand">
+            One API. Three invariants.
+          </p>
+          <h2 class="mt-2 text-3xl font-semibold tracking-tight">
+            Properties the architecture <em>cannot</em> drop.
+          </h2>
+          <p class="mt-3 text-base text-ink-soft">
+            <code class="rounded bg-soft-bg px-1.5 py-0.5 font-mono text-sm">kernel.submit()</code>
+            is the only public way to execute an action. <code class="rounded bg-soft-bg px-1.5 py-0.5 font-mono text-sm">ToolDef</code>
+            is metadata-only. There is no decorator to forget.
+          </p>
+        </div>
+        <div class="mt-10 grid gap-5 md:grid-cols-3">
+          <article class="group rounded-xl border border-line bg-soft-bg/40 p-6 transition hover:bg-white hover:shadow-md">
+            <div class="grid h-9 w-9 place-items-center rounded-lg bg-brand-soft text-brand">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="M12 2 4 6v6c0 5 3.5 9.5 8 10 4.5-.5 8-5 8-10V6Z"/><path d="m9 12 2 2 4-4"/></svg>
+            </div>
+            <h3 class="mt-4 text-lg font-semibold tracking-tight">
+              All access through Gate
+            </h3>
+            <p class="mt-1.5 text-sm leading-relaxed text-ink-soft">
+              <code class="font-mono">kernel.submit()</code> is the only code
+              path that executes tools — enforced structurally, not by
+              convention. There is no second function.
+            </p>
+          </article>
+          <article class="group rounded-xl border border-line bg-soft-bg/40 p-6 transition hover:bg-white hover:shadow-md">
+            <div class="grid h-9 w-9 place-items-center rounded-lg bg-naive-soft text-naive">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 14.14 14.14"/></svg>
+            </div>
+            <h3 class="mt-4 text-lg font-semibold tracking-tight">Default deny</h3>
+            <p class="mt-1.5 text-sm leading-relaxed text-ink-soft">
+              Actions not explicitly allowed in the YAML policy are blocked.
+              Glob resource patterns and constraints make rules expressive
+              without sacrificing the deny-default.
+            </p>
+          </article>
+          <article class="group rounded-xl border border-line bg-soft-bg/40 p-6 transition hover:bg-white hover:shadow-md">
+            <div class="grid h-9 w-9 place-items-center rounded-lg bg-kernel-soft text-kernel">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2Z"/><path d="M9 9h1M9 13h6M9 17h6"/></svg>
+            </div>
+            <h3 class="mt-4 text-lg font-semibold tracking-tight">No silent actions</h3>
+            <p class="mt-1.5 text-sm leading-relaxed text-ink-soft">
+              Every Gate decision — allowed or denied — produces exactly one
+              log record. Append-only, tamper-evident, with action, target,
+              status, duration, error.
+            </p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- Architecture -->
+    <section id="architecture" class="relative">
+      <div class="mx-auto max-w-6xl px-4 py-20 md:px-6 md:py-24">
+        <div class="grid items-center gap-12 md:grid-cols-2">
+          <div>
+            <p class="text-[11px] font-semibold uppercase tracking-wider text-brand">
+              Architecture
+            </p>
+            <h2 class="mt-2 text-3xl font-semibold tracking-tight">
+              Policy. Provider. Audit. Always in this order.
+            </h2>
+            <p class="mt-4 text-base leading-relaxed text-ink-soft">
+              Every <code class="font-mono">submit()</code> follows the same
+              three steps. The Reversible Action Layer wraps the kernel without
+              modifying it — so rollback requests pass through the Gate like
+              any other action.
+            </p>
+            <ul class="mt-6 space-y-3 text-sm leading-relaxed">
+              <li class="flex gap-3">
+                <span class="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-brand-soft text-[11px] font-semibold text-brand">1</span>
+                <span><strong>Policy check.</strong> The action is matched against the YAML capability list. Default deny.</span>
+              </li>
+              <li class="flex gap-3">
+                <span class="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-brand-soft text-[11px] font-semibold text-brand">2</span>
+                <span><strong>Provider execute.</strong> If allowed, the matching provider runs the action — filesystem, http, mcp, process.</span>
+              </li>
+              <li class="flex gap-3">
+                <span class="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-brand-soft text-[11px] font-semibold text-brand">3</span>
+                <span><strong>Audit write.</strong> One JSONL record. Always. Whether the action ran or was denied.</span>
+              </li>
+            </ul>
+          </div>
+          <figure class="relative">
+            <div class="rounded-xl border border-line bg-white p-3 shadow-sm">
+              <img
+                src="./assets/architecture.png"
+                alt="Agent OS Kernel architecture: AgentLoop → kernel.submit() → Policy → Provider → Audit"
+                class="h-auto w-full rounded-lg"
+                loading="lazy"
+              />
+            </div>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <!-- Code example -->
+    <section id="code" class="relative bg-ink text-white">
+      <div class="mx-auto max-w-6xl px-4 py-20 md:px-6 md:py-24">
+        <div class="grid items-start gap-12 md:grid-cols-2">
+          <div>
+            <p class="text-[11px] font-semibold uppercase tracking-wider text-brand-soft/90">
+              Quick taste
+            </p>
+            <h2 class="mt-2 text-3xl font-semibold tracking-tight">
+              Five lines to a Gate.
+            </h2>
+            <p class="mt-3 text-base leading-relaxed text-white/70">
+              Direct kernel use first. The agent loop wraps the same
+              <code class="font-mono text-white">submit()</code> — the LLM
+              cannot bypass it.
+            </p>
+            <div class="mt-6 space-y-3 text-sm">
+              <div class="rounded-lg border border-white/10 bg-white/5 p-4">
+                <div class="text-[11px] font-semibold uppercase tracking-wide text-kernel-soft/80">
+                  Permitted
+                </div>
+                <p class="mt-1 font-mono text-xs text-white/80">
+                  fs.read /workspace/data.csv → <span class="text-kernel-soft">OK</span>
+                </p>
+              </div>
+              <div class="rounded-lg border border-white/10 bg-white/5 p-4">
+                <div class="text-[11px] font-semibold uppercase tracking-wide text-naive-soft/80">
+                  Denied
+                </div>
+                <p class="mt-1 font-mono text-xs text-white/80">
+                  fs.read /etc/passwd → <span class="text-naive-soft">DENIED</span>
+                </p>
+              </div>
+              <div class="rounded-lg border border-white/10 bg-white/5 p-4">
+                <div class="text-[11px] font-semibold uppercase tracking-wide text-warn-soft/80">
+                  Reversible
+                </div>
+                <p class="mt-1 font-mono text-xs text-white/80">
+                  layer.rollback(record_id) → <span class="text-warn-soft">file restored</span>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="rounded-xl border border-white/10 bg-black/40 p-1 shadow-2xl">
+            <div class="flex items-center justify-between rounded-t-lg border-b border-white/10 bg-white/5 px-3 py-1.5">
+              <div class="flex items-center gap-1.5">
+                <span class="h-2.5 w-2.5 rounded-full bg-naive/80"></span>
+                <span class="h-2.5 w-2.5 rounded-full bg-warn/80"></span>
+                <span class="h-2.5 w-2.5 rounded-full bg-kernel/80"></span>
+              </div>
+              <span class="font-mono text-[10px] uppercase tracking-wide text-white/40">
+                hello_kernel.py
+              </span>
+            </div>
+            <pre class="overflow-x-auto rounded-b-lg p-5"><code class="language-python">from agent_os_kernel import Kernel, ActionRequest
+from agent_os_kernel.providers.filesystem import FilesystemProvider
+
+with Kernel(
+    policy="policy.yaml",
+    providers=[FilesystemProvider()],
+    log_path="kernel.log",
+) as kernel:
+    ok = kernel.submit(
+        ActionRequest(action="fs.read", target="/workspace/data.csv")
+    )
+    print(ok.status)        # OK
+
+    denied = kernel.submit(
+        ActionRequest(action="fs.read", target="/etc/passwd")
+    )
+    print(denied.status)    # DENIED — default-deny
+</code></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Workbench callout -->
+    <section id="workbench" class="relative bg-soft-bg">
+      <div class="mx-auto max-w-6xl px-4 py-20 md:px-6 md:py-24">
+        <div class="rounded-2xl border border-line bg-white p-8 shadow-sm md:p-12">
+          <div class="grid items-center gap-10 md:grid-cols-[1fr_320px]">
+            <div>
+              <p class="text-[11px] font-semibold uppercase tracking-wider text-brand">
+                Interactive workbench
+              </p>
+              <h2 class="mt-2 text-3xl font-semibold tracking-tight">
+                See the Gate in motion.
+              </h2>
+              <p class="mt-3 max-w-xl text-base leading-relaxed text-ink-soft">
+                Run a "dangerous DB cleanup" scenario side-by-side. The
+                workbench compares a naive runtime against the kernel — same
+                LLM, same tools, different invariants — and exposes
+                <strong>policy rule trace</strong>, <strong>reversible
+                rollback</strong>, and a <strong>performance gantt</strong> for
+                every Gate decision.
+              </p>
+              <div class="mt-6 flex flex-wrap items-center gap-3">
+                <a
+                  href="https://github.com/JiahaoZhang-Public/agent-kernel/tree/main/demo"
+                  target="_blank"
+                  rel="noopener"
+                  class="inline-flex items-center gap-2 rounded-md bg-ink px-4 py-2.5 text-sm font-medium text-white hover:bg-ink-soft"
+                >
+                  Run the workbench locally
+                </a>
+                <a
+                  href="https://github.com/JiahaoZhang-Public/agent-kernel/blob/main/demo/README.md"
+                  target="_blank"
+                  rel="noopener"
+                  class="inline-flex items-center gap-2 text-sm font-medium text-brand hover:underline"
+                >
+                  Workbench README →
+                </a>
+              </div>
+              <ul class="mt-7 grid gap-3 text-sm sm:grid-cols-3">
+                <li class="rounded-md border border-line bg-soft-bg/60 px-3 py-2">
+                  <span class="text-[10px] font-semibold uppercase tracking-wide text-muted">Sell-point #1</span>
+                  <div class="mt-0.5 font-medium">Policy rule trace</div>
+                </li>
+                <li class="rounded-md border border-line bg-soft-bg/60 px-3 py-2">
+                  <span class="text-[10px] font-semibold uppercase tracking-wide text-muted">Sell-point #2</span>
+                  <div class="mt-0.5 font-medium">Reversible rollback</div>
+                </li>
+                <li class="rounded-md border border-line bg-soft-bg/60 px-3 py-2">
+                  <span class="text-[10px] font-semibold uppercase tracking-wide text-muted">Sell-point #3</span>
+                  <div class="mt-0.5 font-medium">Performance gantt</div>
+                </li>
+              </ul>
+            </div>
+
+            <div class="rounded-xl border border-line bg-soft-bg/60 p-4">
+              <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">
+                One-shot run
+              </div>
+              <pre class="mt-2 overflow-x-auto rounded-lg bg-ink p-4 text-white"><code class="language-bash">$ uvicorn demo.backend.app:app --port 8000 &
+$ cd demo/frontend && npm run dev
+
+# open http://127.0.0.1:5173</code></pre>
+              <div class="mt-4 grid grid-cols-2 gap-2 text-[11px]">
+                <div class="rounded border border-line bg-white px-2 py-1.5">
+                  <div class="text-muted">Naive</div>
+                  <div class="font-mono">4 rows lost</div>
+                </div>
+                <div class="rounded border border-kernel/40 bg-kernel-soft/40 px-2 py-1.5">
+                  <div class="text-kernel">Kernel</div>
+                  <div class="font-mono">5 rows preserved</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Features -->
+    <section id="features" class="relative bg-white">
+      <div class="mx-auto max-w-6xl px-4 py-20 md:px-6 md:py-24">
+        <p class="text-[11px] font-semibold uppercase tracking-wider text-brand">
+          Inside the kernel
+        </p>
+        <h2 class="mt-2 text-3xl font-semibold tracking-tight">
+          Small surface, strong guarantees.
+        </h2>
+        <div class="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          <div class="rounded-lg border border-line bg-soft-bg/40 p-5">
+            <h3 class="text-sm font-semibold tracking-tight">Structural Gate</h3>
+            <p class="mt-1 text-sm text-ink-soft">
+              <code class="font-mono">kernel.submit()</code> is the sole tool execution path.
+              <code class="font-mono">ToolDef</code> is pure metadata.
+            </p>
+          </div>
+          <div class="rounded-lg border border-line bg-soft-bg/40 p-5">
+            <h3 class="text-sm font-semibold tracking-tight">YAML policy</h3>
+            <p class="mt-1 text-sm text-ink-soft">
+              Allow-list with glob resource matching and constraint support.
+              Default deny.
+            </p>
+          </div>
+          <div class="rounded-lg border border-line bg-soft-bg/40 p-5">
+            <h3 class="text-sm font-semibold tracking-tight">Append-only audit</h3>
+            <p class="mt-1 text-sm text-ink-soft">
+              Tamper-evident JSONL. Status, duration, error, record_id —
+              every <code class="font-mono">submit()</code> recorded.
+            </p>
+          </div>
+          <div class="rounded-lg border border-line bg-soft-bg/40 p-5">
+            <h3 class="text-sm font-semibold tracking-tight">Reversible Layer</h3>
+            <p class="mt-1 text-sm text-ink-soft">
+              Snapshot-and-rollback for write operations. Wraps the kernel
+              without modifying it.
+            </p>
+          </div>
+          <div class="rounded-lg border border-line bg-soft-bg/40 p-5">
+            <h3 class="text-sm font-semibold tracking-tight">4 built-in providers</h3>
+            <p class="mt-1 text-sm text-ink-soft">
+              Filesystem, process, HTTP, MCP (Model Context Protocol).
+            </p>
+          </div>
+          <div class="rounded-lg border border-line bg-soft-bg/40 p-5">
+            <h3 class="text-sm font-semibold tracking-tight">100+ LLM providers</h3>
+            <p class="mt-1 text-sm text-ink-soft">
+              LiteLLM-powered: OpenAI, Anthropic, Ollama, Azure, and more.
+            </p>
+          </div>
+          <div class="rounded-lg border border-line bg-soft-bg/40 p-5">
+            <h3 class="text-sm font-semibold tracking-tight">CLI</h3>
+            <p class="mt-1 text-sm text-ink-soft">
+              <code class="font-mono">submit · log · validate-policy · version</code>
+            </p>
+          </div>
+          <div class="rounded-lg border border-line bg-soft-bg/40 p-5">
+            <h3 class="text-sm font-semibold tracking-tight">High throughput</h3>
+            <p class="mt-1 text-sm text-ink-soft">
+              77,000+ ops/s. p99 &lt; 0.1 ms. The Gate is not the bottleneck.
+            </p>
+          </div>
+          <div class="rounded-lg border border-line bg-soft-bg/40 p-5">
+            <h3 class="text-sm font-semibold tracking-tight">Auditable core</h3>
+            <p class="mt-1 text-sm text-ink-soft">
+              ~1,600 lines of kernel source. Small enough to read end-to-end.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Install -->
+    <section id="install" class="relative">
+      <div class="mx-auto max-w-6xl px-4 py-20 md:px-6 md:py-24">
+        <div class="grid items-center gap-12 md:grid-cols-[1fr_1.4fr]">
+          <div>
+            <p class="text-[11px] font-semibold uppercase tracking-wider text-brand">
+              Install
+            </p>
+            <h2 class="mt-2 text-3xl font-semibold tracking-tight">
+              One pip away.
+            </h2>
+            <p class="mt-3 text-ink-soft">
+              Python 3.10+. Zero runtime dependencies in the kernel core. Works
+              with any LiteLLM-compatible provider.
+            </p>
+            <div class="mt-5 flex flex-wrap gap-3 text-sm">
+              <a
+                href="https://pypi.org/project/py-agent-kernel/"
+                target="_blank"
+                rel="noopener"
+                class="rounded-md border border-line bg-white px-3 py-2 font-medium hover:bg-soft-bg"
+                >PyPI</a
+              >
+              <a
+                href="https://agent-kernel.readthedocs.io/en/latest/"
+                target="_blank"
+                rel="noopener"
+                class="rounded-md border border-line bg-white px-3 py-2 font-medium hover:bg-soft-bg"
+                >Docs</a
+              >
+              <a
+                href="https://github.com/JiahaoZhang-Public/agent-kernel/tree/main/examples"
+                target="_blank"
+                rel="noopener"
+                class="rounded-md border border-line bg-white px-3 py-2 font-medium hover:bg-soft-bg"
+                >30 Examples</a
+              >
+            </div>
+          </div>
+          <div class="space-y-4">
+            <div class="rounded-xl border border-line bg-white p-5 shadow-sm">
+              <div class="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                pip
+              </div>
+              <pre class="mt-2 overflow-x-auto"><code class="language-bash">pip install py-agent-kernel</code></pre>
+            </div>
+            <div class="rounded-xl border border-line bg-white p-5 shadow-sm">
+              <div class="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                uv
+              </div>
+              <pre class="mt-2 overflow-x-auto"><code class="language-bash">uv add py-agent-kernel</code></pre>
+            </div>
+            <div class="rounded-xl border border-line bg-white p-5 shadow-sm">
+              <div class="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                from source
+              </div>
+              <pre class="mt-2 overflow-x-auto"><code class="language-bash">git clone https://github.com/JiahaoZhang-Public/agent-kernel.git
+cd agent-kernel && pip install -e .</code></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="border-t border-line bg-white">
+      <div class="mx-auto flex max-w-6xl flex-col items-start justify-between gap-5 px-4 py-10 text-sm md:flex-row md:items-center md:px-6">
+        <div class="flex items-center gap-3 text-muted">
+          <span class="grid h-7 w-7 place-items-center rounded-md bg-brand-soft text-brand">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="M12 2 4 6v6c0 5 3.5 9.5 8 10 4.5-.5 8-5 8-10V6Z"/></svg>
+          </span>
+          <span>
+            Agent OS Kernel · MIT License · Maintained by
+            <a href="https://github.com/JiahaoZhang-Public" class="text-ink hover:text-brand" target="_blank" rel="noopener">@JiahaoZhang-Public</a>
+          </span>
+        </div>
+        <div class="flex flex-wrap items-center gap-5">
+          <a href="https://github.com/JiahaoZhang-Public/agent-kernel" target="_blank" rel="noopener" class="text-ink-soft hover:text-brand">GitHub</a>
+          <a href="https://pypi.org/project/py-agent-kernel/" target="_blank" rel="noopener" class="text-ink-soft hover:text-brand">PyPI</a>
+          <a href="https://agent-kernel.readthedocs.io/en/latest/" target="_blank" rel="noopener" class="text-ink-soft hover:text-brand">Docs</a>
+          <a href="https://github.com/JiahaoZhang-Public/agent-kernel/issues" target="_blank" rel="noopener" class="text-ink-soft hover:text-brand">Issues</a>
+        </div>
+      </div>
+    </footer>
+
+    <script>
+      hljs.highlightAll();
+      const obs = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((e) => {
+            if (e.isIntersecting) {
+              e.target.classList.add("in");
+              obs.unobserve(e.target);
+            }
+          });
+        },
+        { threshold: 0.18 },
+      );
+      document.querySelectorAll(".scroll-fade").forEach((el) => obs.observe(el));
+    </script>
+  </body>
+</html>
