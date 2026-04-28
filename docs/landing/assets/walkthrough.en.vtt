@@ -1,0 +1,19 @@
+WEBVTT
+
+00:00.000 --> 00:05.000
+We ask an AI assistant to clean up a database.
+
+00:05.000 --> 00:10.000
+It plans a dangerous action against production data.
+
+00:10.000 --> 00:15.000
+The safety gate checks the allow-list first.
+
+00:15.000 --> 00:20.000
+The gate blocks the unsafe action and records it.
+
+00:20.000 --> 00:25.000
+The assistant changes course and uses a safe target.
+
+00:25.000 --> 00:30.000
+The safe action runs, and the audit log keeps the record.

