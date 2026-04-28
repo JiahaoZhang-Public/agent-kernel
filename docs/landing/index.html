@@ -3,40 +3,29 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Agent OS Kernel — A security boundary for LLM agents</title>
+    <title>Agent OS Kernel - A safety gate for AI agents</title>
     <meta
       name="description"
-      content="A minimal, auditable security kernel for LLM agents. Every tool call is policy-checked, immutably logged, and optionally reversible — enforced structurally, not by convention."
+      content="Agent OS Kernel is a safety gate for AI agents. Every action gets checked first, executed only if allowed, and recorded either way."
     />
     <meta property="og:title" content="Agent OS Kernel" />
     <meta
       property="og:description"
-      content="A security boundary for LLM agents. Policy → execute → audit, on every action."
+      content="If your AI assistant goes wrong, Agent OS Kernel checks, blocks, and records risky actions before they reach the real world."
     />
-    <meta property="og:image" content="./assets/architecture.png" />
+    <meta property="og:image" content="./assets/hero-loop-poster.png" />
     <meta name="twitter:card" content="summary_large_image" />
 
     <link rel="icon" type="image/png" href="./assets/logo.png" />
-
     <link rel="preconnect" href="https://rsms.me/" />
     <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
     <link
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono/web/woff2/JetBrainsMono.css"
     />
-    <link
-      rel="stylesheet"
-      href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github.min.css"
-    />
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/languages/python.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/languages/yaml.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/languages/bash.min.js"></script>
-
     <script>
       tailwind.config = {
-        darkMode: "class",
         theme: {
           extend: {
             fontFamily: {
@@ -49,13 +38,7 @@
                 "Segoe UI",
                 "sans-serif",
               ],
-              mono: [
-                "JetBrains Mono",
-                "SFMono-Regular",
-                "Menlo",
-                "Consolas",
-                "monospace",
-              ],
+              mono: ["JetBrains Mono", "SFMono-Regular", "Menlo", "Consolas", "monospace"],
             },
             colors: {
               ink: "#0f172a",
@@ -63,34 +46,15 @@
               muted: "#6b7280",
               line: "#e2e6ec",
               "soft-bg": "#f8fafd",
-              brand: {
-                DEFAULT: "#4f46e5",
-                soft: "#eef2ff",
-                deep: "#3730a3",
-              },
-              kernel: {
-                DEFAULT: "#0d9b6c",
-                soft: "#dcfce7",
-              },
-              naive: {
-                DEFAULT: "#dc2626",
-                soft: "#fee2e2",
-              },
+              brand: { DEFAULT: "#4f46e5", soft: "#eef2ff", deep: "#3730a3" },
+              kernel: { DEFAULT: "#0d9b6c", soft: "#dcfce7" },
+              naive: { DEFAULT: "#dc2626", soft: "#fee2e2" },
               warn: { DEFAULT: "#d97706", soft: "#fef3c7" },
+              alarm: { bg: "#1a0d0d", text: "#fee2e2" },
             },
-            keyframes: {
-              floaty: {
-                "0%, 100%": { transform: "translateY(0)" },
-                "50%": { transform: "translateY(-6px)" },
-              },
-              shimmer: {
-                "0%": { backgroundPosition: "-200% 0" },
-                "100%": { backgroundPosition: "200% 0" },
-              },
-            },
-            animation: {
-              floaty: "floaty 4s ease-in-out infinite",
-              shimmer: "shimmer 6s linear infinite",
+            boxShadow: {
+              float:
+                "0 30px 80px -40px rgba(79,70,229,.5), 0 6px 20px -4px rgba(15,23,42,.06)",
             },
           },
         },
@@ -98,105 +62,447 @@
     </script>
 
     <style>
+      :root {
+        --color-brand: #4f46e5;
+        --color-brand-deep: #3730a3;
+        --color-kernel: #0d9b6c;
+        --color-naive: #dc2626;
+        --color-warn: #d97706;
+        --color-ink: #0f172a;
+        --color-muted: #6b7280;
+        --color-line: #e2e6ec;
+        --radius-card: 16px;
+        --motion-fast: 150ms ease-out;
+        --motion-med: 350ms cubic-bezier(0.2, 0.8, 0.2, 1);
+        --motion-slow: 800ms cubic-bezier(0.2, 0.8, 0.2, 1);
+      }
+
       html {
         scroll-behavior: smooth;
       }
+
+      section {
+        scroll-margin-top: 4.5rem;
+      }
+
       body {
         font-feature-settings: "cv11", "ss01", "ss03";
       }
+
+      .skip-link {
+        position: fixed;
+        top: 0.75rem;
+        left: 0.75rem;
+        z-index: 100;
+        transform: translateY(-160%);
+        border-radius: 0.5rem;
+        background: var(--color-ink);
+        color: white;
+        padding: 0.625rem 0.875rem;
+        opacity: 0;
+        pointer-events: none;
+        transition: transform var(--motion-fast);
+      }
+
+      .skip-link:focus {
+        transform: translateY(0);
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      :focus-visible {
+        outline: 2px solid var(--color-brand);
+        outline-offset: 3px;
+      }
+
       .grid-bg {
         background-image:
-          linear-gradient(to right, rgba(15, 23, 42, 0.04) 1px, transparent 1px),
-          linear-gradient(to bottom, rgba(15, 23, 42, 0.04) 1px, transparent 1px);
+          linear-gradient(to right, rgba(15, 23, 42, 0.045) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(15, 23, 42, 0.045) 1px, transparent 1px);
         background-size: 56px 56px;
       }
-      .glow-ring {
+
+      .nav-link {
+        position: relative;
+        padding: 1.125rem 0;
+        color: #1f2937;
+        transition: color var(--motion-fast);
+      }
+
+      .nav-link::after {
+        position: absolute;
+        right: 0;
+        bottom: 0.65rem;
+        left: 0;
+        height: 2px;
+        content: "";
+        transform: scaleX(0);
+        transform-origin: left;
+        border-radius: 9999px;
+        background: var(--color-brand);
+        transition: transform 200ms ease-out;
+      }
+
+      .nav-link:hover,
+      .nav-link[aria-current="page"] {
+        color: var(--color-brand);
+      }
+
+      .nav-link:hover::after,
+      .nav-link[aria-current="page"]::after {
+        transform: scaleX(1);
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        border-radius: 9999px;
+        border: 1px solid rgba(79, 70, 229, 0.22);
+        background: #eef2ff;
+        padding: 0.35rem 0.75rem;
+        color: #3730a3;
+        font-size: 0.69rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .section-shell {
+        margin-inline: auto;
+        max-width: 72rem;
+        padding: 5rem 1rem;
+      }
+
+      @media (min-width: 768px) {
+        .section-shell {
+          padding: 6rem 1.5rem;
+        }
+      }
+
+      .reveal > * {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      .reveal.in > * {
+        animation: fade-up 600ms ease-out both;
+      }
+
+      .reveal.in > *:nth-child(2) {
+        animation-delay: 100ms;
+      }
+
+      .reveal.in > *:nth-child(3) {
+        animation-delay: 200ms;
+      }
+
+      @keyframes fade-up {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .media-shell {
+        position: relative;
+        overflow: hidden;
+        border-radius: 1rem;
+        border: 1px solid var(--color-line);
+        background: white;
         box-shadow:
           0 30px 80px -40px rgba(79, 70, 229, 0.5),
           0 6px 20px -4px rgba(15, 23, 42, 0.06);
       }
-      .gradient-text {
-        background: linear-gradient(120deg, #4f46e5 0%, #0d9b6c 60%, #4f46e5 100%);
-        background-size: 200% auto;
-        -webkit-background-clip: text;
-        background-clip: text;
-        color: transparent;
-        animation: shimmer 8s linear infinite;
+
+      .media-shell video,
+      .media-shell img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
       }
-      pre code.hljs {
-        background: transparent !important;
-        padding: 0 !important;
-        font-family: theme("fontFamily.mono");
-        font-size: 0.78rem;
-        line-height: 1.55;
-      }
-      .code-card {
-        background: #0f172a;
-        color: #e2e8f0;
-      }
-      .code-card .hljs-keyword {
-        color: #93c5fd;
-      }
-      .code-card .hljs-string {
-        color: #86efac;
-      }
-      .code-card .hljs-comment {
-        color: #94a3b8;
-      }
-      .code-card .hljs-number {
-        color: #fde68a;
-      }
-      .lane-rail {
-        position: relative;
-      }
-      .lane-rail::before {
-        content: "";
+
+      .play-fallback {
         position: absolute;
-        left: 0;
-        top: 0;
-        bottom: 0;
-        width: 4px;
-        border-radius: 2px;
+        right: 1rem;
+        bottom: 1rem;
+        display: none;
+        border-radius: 9999px;
+        background: rgba(15, 23, 42, 0.9);
+        color: white;
+        padding: 0.55rem 0.8rem;
+        font-size: 0.8rem;
+        font-weight: 700;
       }
-      .lane-naive::before {
-        background: #dc2626;
+
+      .show-play-fallback .play-fallback {
+        display: inline-flex;
       }
-      .lane-kernel::before {
-        background: #0d9b6c;
+
+      .stakes-card {
+        border-left: 4px solid var(--color-naive);
+        border-radius: 0 1rem 1rem 0;
+        background: rgba(255, 255, 255, 0.06);
+        padding: 1.5rem;
       }
-      .scroll-fade > * {
+
+      .stakes-card img {
+        width: 4.75rem;
+        height: 4.75rem;
+      }
+
+      @keyframes shake {
+        0%,
+        100% {
+          transform: translateX(0);
+        }
+        25% {
+          transform: translateX(-4px);
+        }
+        50% {
+          transform: translateX(4px);
+        }
+        75% {
+          transform: translateX(-2px);
+        }
+      }
+
+      .reveal.in .stakes-card img {
+        animation: shake 600ms ease-out 1;
+      }
+
+      .scenario-button[aria-pressed="true"] {
+        border-color: rgba(79, 70, 229, 0.45);
+        background: #eef2ff;
+        color: #3730a3;
+      }
+
+      .timeline {
+        position: relative;
+        display: grid;
+        gap: 0.75rem;
+      }
+
+      .timeline::before {
+        position: absolute;
+        top: 1.05rem;
+        bottom: 1.05rem;
+        left: 0.72rem;
+        width: 2px;
+        content: "";
+        background: #e2e6ec;
+      }
+
+      .timeline-item {
+        position: relative;
+        display: grid;
+        grid-template-columns: 1.55rem minmax(0, 1fr);
+        gap: 0.75rem;
+        align-items: start;
+      }
+
+      .timeline-dot {
+        z-index: 1;
+        margin-top: 0.35rem;
+        width: 0.9rem;
+        height: 0.9rem;
+        border-radius: 9999px;
+        border: 2px solid white;
+        background: #cbd5e1;
+        box-shadow: 0 0 0 1px #cbd5e1;
+      }
+
+      .timeline-item.current .timeline-dot {
+        background: var(--color-brand);
+        box-shadow: 0 0 0 6px rgba(79, 70, 229, 0.12);
+        animation: pulse-dot 800ms ease-in-out infinite;
+      }
+
+      .timeline-item.deny .timeline-dot {
+        background: var(--color-naive);
+        box-shadow: 0 0 0 1px var(--color-naive);
+      }
+
+      .timeline-item.allow .timeline-dot {
+        background: var(--color-kernel);
+        box-shadow: 0 0 0 1px var(--color-kernel);
+      }
+
+      @keyframes pulse-dot {
+        0%,
+        100% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.35);
+        }
+      }
+
+      .decision-card.allow {
+        box-shadow: 0 0 0 6px rgba(13, 155, 108, 0.13), 0 16px 40px -30px rgba(13, 155, 108, 0.55);
+      }
+
+      .decision-card.deny {
+        box-shadow: 0 0 0 6px rgba(220, 38, 38, 0.13), 0 16px 40px -30px rgba(220, 38, 38, 0.55);
+      }
+
+      .audit-row {
+        animation: log-in 250ms ease-out both;
+      }
+
+      @keyframes log-in {
+        from {
+          opacity: 0;
+          transform: translateX(-8px);
+        }
+        to {
+          opacity: 1;
+          transform: translateX(0);
+        }
+      }
+
+      .how-card .dev-truth {
+        max-height: 0;
         opacity: 0;
-        transform: translateY(8px);
+        overflow: hidden;
+        transform: translateY(-4px);
         transition:
-          opacity 600ms ease-out,
-          transform 600ms ease-out;
+          max-height 260ms ease-out,
+          opacity 260ms ease-out,
+          transform 260ms ease-out;
       }
-      .scroll-fade.in > * {
+
+      .how-card:hover .dev-truth,
+      .how-card:focus-within .dev-truth {
+        max-height: 6rem;
         opacity: 1;
         transform: translateY(0);
       }
+
+      .dev-panel {
+        max-height: 0;
+        opacity: 0;
+        overflow: hidden;
+        transition:
+          max-height 400ms ease-out,
+          opacity 300ms ease-out;
+      }
+
+      .dev-panel.open {
+        max-height: 260rem;
+        opacity: 1;
+      }
+
+      pre code {
+        font-family: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+        font-size: 0.78rem;
+        line-height: 1.58;
+      }
+
+      pre {
+        max-width: 100%;
+        min-width: 0;
+      }
+
+      @media (min-width: 768px) {
+        .timeline {
+          grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+          gap: 0.6rem;
+        }
+
+        .timeline::before {
+          top: 1.02rem;
+          right: 1.25rem;
+          bottom: auto;
+          left: 1.25rem;
+          width: auto;
+          height: 2px;
+        }
+
+        .timeline-item {
+          grid-template-columns: 1fr;
+          gap: 0.45rem;
+        }
+
+        .timeline-dot {
+          margin-top: 0;
+        }
+      }
+
+      @media (max-width: 639px) {
+        #top h1 {
+          font-size: 2.55rem;
+        }
+
+        .hero-video {
+          aspect-ratio: 1 / 1;
+        }
+
+        .mobile-panel {
+          display: none;
+        }
+
+        .mobile-panel.active {
+          display: block;
+        }
+      }
+
+      @media (min-width: 640px) {
+        .mobile-tabs {
+          display: none;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          animation-duration: 1ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 1ms !important;
+        }
+      }
     </style>
   </head>
+
   <body class="bg-soft-bg text-ink antialiased">
-    <!-- Top navigation -->
-    <header class="sticky top-0 z-40 border-b border-line bg-white/85 backdrop-blur">
+    <a href="#main" class="skip-link">Skip to content</a>
+
+    <header class="sticky top-0 z-40 border-b border-line bg-white/90 backdrop-blur">
       <div class="mx-auto flex h-14 max-w-6xl items-center gap-4 px-4 md:px-6">
-        <a href="#top" class="flex items-center gap-2">
+        <a href="#top" class="flex items-center gap-2" aria-label="Agent OS Kernel home">
           <span class="grid h-7 w-7 place-items-center rounded-md bg-brand-soft text-brand">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="M12 2 4 6v6c0 5 3.5 9.5 8 10 4.5-.5 8-5 8-10V6Z"/></svg>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="h-4 w-4"
+              aria-hidden="true"
+            >
+              <path d="M12 2 4 6v6c0 5 3.5 9.5 8 10 4.5-.5 8-5 8-10V6Z" />
+            </svg>
           </span>
           <span class="text-sm font-semibold tracking-tight">Agent OS Kernel</span>
         </a>
-        <nav class="ml-auto hidden items-center gap-6 text-sm md:flex">
-          <a href="#why" class="text-ink-soft hover:text-brand">Why</a>
-          <a href="#invariants" class="text-ink-soft hover:text-brand">Invariants</a>
-          <a href="#workbench" class="text-ink-soft hover:text-brand">Workbench</a>
-          <a href="#install" class="text-ink-soft hover:text-brand">Install</a>
+        <nav aria-label="primary" class="ml-auto hidden items-center gap-6 text-sm md:flex">
+          <a href="#why" class="nav-link">Why</a>
+          <a href="#try-it" class="nav-link">Try It</a>
+          <a href="#how-it-works" class="nav-link">How It Works</a>
+          <a href="#for-devs" class="nav-link">For Devs</a>
           <a
             href="https://agent-kernel.readthedocs.io/en/latest/"
             target="_blank"
             rel="noopener"
-            class="text-ink-soft hover:text-brand"
+            class="nav-link"
             >Docs</a
           >
         </nav>
@@ -206,620 +512,615 @@
           rel="noopener"
           class="inline-flex items-center gap-1.5 rounded-md border border-line bg-white px-3 py-1.5 text-xs font-medium hover:bg-soft-bg"
         >
-          <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56v-1.97c-3.2.7-3.87-1.54-3.87-1.54-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.75 2.68 1.24 3.34.95.1-.74.4-1.24.72-1.52-2.55-.29-5.23-1.27-5.23-5.66 0-1.25.45-2.27 1.18-3.07-.12-.29-.51-1.46.11-3.04 0 0 .96-.31 3.15 1.17a10.94 10.94 0 0 1 5.74 0c2.19-1.48 3.15-1.17 3.15-1.17.62 1.58.23 2.75.11 3.04.74.8 1.18 1.82 1.18 3.07 0 4.4-2.69 5.36-5.25 5.65.41.36.78 1.06.78 2.13v3.16c0 .31.21.68.79.56A11.53 11.53 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5Z"/></svg>
+          <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="currentColor" aria-hidden="true">
+            <path
+              d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56v-1.97c-3.2.7-3.87-1.54-3.87-1.54-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.75 2.68 1.24 3.34.95.1-.74.4-1.24.72-1.52-2.55-.29-5.23-1.27-5.23-5.66 0-1.25.45-2.27 1.18-3.07-.12-.29-.51-1.46.11-3.04 0 0 .96-.31 3.15 1.17a10.94 10.94 0 0 1 5.74 0c2.19-1.48 3.15-1.17 3.15-1.17.62 1.58.23 2.75.11 3.04.74.8 1.18 1.82 1.18 3.07 0 4.4-2.69 5.36-5.25 5.65.41.36.78 1.06.78 2.13v3.16c0 .31.21.68.79.56A11.53 11.53 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5Z"
+            />
+          </svg>
           GitHub
         </a>
       </div>
     </header>
 
-    <!-- Hero -->
-    <section id="top" class="relative overflow-hidden">
-      <div class="absolute inset-0 grid-bg opacity-60"></div>
-      <div
-        aria-hidden="true"
-        class="absolute -top-24 right-0 h-[420px] w-[420px] rounded-full bg-brand/10 blur-3xl"
-      ></div>
-      <div
-        aria-hidden="true"
-        class="absolute -bottom-32 -left-20 h-[420px] w-[420px] rounded-full bg-kernel/10 blur-3xl"
-      ></div>
-      <div class="relative mx-auto max-w-6xl px-4 py-20 md:px-6 md:py-28">
-        <div class="grid items-center gap-10 md:grid-cols-2 md:gap-14">
-          <div>
-            <div class="inline-flex items-center gap-2 rounded-full border border-brand/30 bg-brand-soft px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-brand">
-              <span class="h-1.5 w-1.5 rounded-full bg-brand"></span>
-              v0.4.3 · py-agent-kernel on PyPI
-            </div>
-            <h1 class="mt-5 text-4xl font-semibold leading-tight tracking-tight text-ink md:text-5xl">
-              A security <span class="gradient-text">boundary</span><br />
-              for LLM agents.
-            </h1>
-            <p class="mt-5 max-w-xl text-base leading-relaxed text-ink-soft md:text-lg">
-              Every tool call an agent makes is authorized by policy, logged
-              immutably, and optionally reversible — enforced at the architecture
-              level, not by convention.
-            </p>
-            <div class="mt-7 flex flex-wrap items-center gap-3">
-              <a
-                href="#install"
-                class="inline-flex items-center gap-2 rounded-md bg-brand px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-brand-deep"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
-                Install
-              </a>
-              <a
-                href="https://github.com/JiahaoZhang-Public/agent-kernel"
-                target="_blank"
-                rel="noopener"
-                class="inline-flex items-center gap-2 rounded-md border border-line bg-white px-4 py-2.5 text-sm font-medium hover:bg-soft-bg"
-              >
-                <svg viewBox="0 0 24 24" class="h-4 w-4" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56v-1.97c-3.2.7-3.87-1.54-3.87-1.54-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.75 2.68 1.24 3.34.95.1-.74.4-1.24.72-1.52-2.55-.29-5.23-1.27-5.23-5.66 0-1.25.45-2.27 1.18-3.07-.12-.29-.51-1.46.11-3.04 0 0 .96-.31 3.15 1.17a10.94 10.94 0 0 1 5.74 0c2.19-1.48 3.15-1.17 3.15-1.17.62 1.58.23 2.75.11 3.04.74.8 1.18 1.82 1.18 3.07 0 4.4-2.69 5.36-5.25 5.65.41.36.78 1.06.78 2.13v3.16c0 .31.21.68.79.56A11.53 11.53 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5Z"/></svg>
-                Star on GitHub
-              </a>
-              <a
-                href="https://agent-kernel.readthedocs.io/en/latest/"
-                target="_blank"
-                rel="noopener"
-                class="inline-flex items-center gap-2 text-sm font-medium text-brand hover:underline"
-              >
-                Read the docs →
-              </a>
-            </div>
-            <dl class="mt-10 grid max-w-md grid-cols-3 gap-4 text-center">
-              <div class="rounded-lg border border-line bg-white px-3 py-3">
-                <dt class="text-[11px] font-medium uppercase tracking-wide text-muted">
-                  Throughput
-                </dt>
-                <dd class="mt-0.5 text-base font-semibold tabular-nums">77K ops/s</dd>
-              </div>
-              <div class="rounded-lg border border-line bg-white px-3 py-3">
-                <dt class="text-[11px] font-medium uppercase tracking-wide text-muted">
-                  p99 latency
-                </dt>
-                <dd class="mt-0.5 text-base font-semibold tabular-nums">&lt; 0.1 ms</dd>
-              </div>
-              <div class="rounded-lg border border-line bg-white px-3 py-3">
-                <dt class="text-[11px] font-medium uppercase tracking-wide text-muted">
-                  Coverage
-                </dt>
-                <dd class="mt-0.5 text-base font-semibold tabular-nums">96 %</dd>
-              </div>
-            </dl>
-          </div>
-
-          <!-- Hero illustration: stylised kernel diagram -->
-          <div class="relative">
-            <div class="glow-ring rounded-2xl border border-line bg-white p-5 shadow-xl">
-              <div class="flex items-center justify-between border-b border-line pb-3">
-                <div class="flex items-center gap-2">
-                  <div class="grid h-7 w-7 place-items-center rounded-md bg-brand/10 text-brand">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="M12 2 4 6v6c0 5 3.5 9.5 8 10 4.5-.5 8-5 8-10V6Z"/></svg>
-                  </div>
-                  <div>
-                    <div class="text-xs font-semibold tracking-tight">Workbench</div>
-                    <div class="text-[10px] uppercase tracking-wide text-muted">naive vs kernel</div>
-                  </div>
-                </div>
-                <div class="flex items-center gap-1.5 text-[10px]">
-                  <span class="inline-block h-1.5 w-1.5 rounded-full bg-kernel"></span>
-                  <span class="text-muted">Run done · 86 ms</span>
-                </div>
-              </div>
-
-              <div class="mt-4 grid grid-cols-3 gap-2 text-center">
-                <div class="rounded-md border-l-4 border-naive/80 bg-soft-bg px-2 py-2">
-                  <div class="text-[9px] font-medium uppercase tracking-wide text-muted">Blocked</div>
-                  <div class="text-xl font-semibold tabular-nums">1</div>
-                </div>
-                <div class="rounded-md border-l-4 border-brand/70 bg-soft-bg px-2 py-2">
-                  <div class="text-[9px] font-medium uppercase tracking-wide text-muted">Audited</div>
-                  <div class="text-xl font-semibold tabular-nums">2</div>
-                </div>
-                <div class="rounded-md border-l-4 border-kernel/80 bg-soft-bg px-2 py-2">
-                  <div class="text-[9px] font-medium uppercase tracking-wide text-muted">Δ rows</div>
-                  <div class="text-xl font-semibold tabular-nums text-kernel">+1</div>
-                </div>
-              </div>
-
-              <!-- mini-gantt -->
-              <div class="mt-5 space-y-3">
-                <div class="lane-rail lane-naive pl-3">
-                  <div class="text-[10px] font-medium uppercase tracking-wide text-muted">Naive</div>
-                  <div class="mt-1 flex h-3 items-center gap-0.5 rounded bg-soft-bg p-0.5">
-                    <span class="block h-2 w-3 rounded bg-muted/60"></span>
-                    <span class="block h-2 w-20 rounded bg-naive"></span>
-                  </div>
-                </div>
-                <div class="lane-rail lane-kernel pl-3">
-                  <div class="text-[10px] font-medium uppercase tracking-wide text-muted">Kernel</div>
-                  <div class="mt-1 flex h-3 items-center gap-0.5 rounded bg-soft-bg p-0.5">
-                    <span class="block h-2 w-3 rounded bg-muted/60"></span>
-                    <span class="block h-2 w-10 rounded bg-naive"></span>
-                    <span class="block h-2 w-3 rounded bg-muted/60"></span>
-                    <span class="block h-2 w-3 rounded bg-muted/60"></span>
-                    <span class="block h-2 w-6 rounded bg-kernel"></span>
-                  </div>
-                </div>
-              </div>
-
-              <div class="mt-4 grid grid-cols-2 gap-2 text-[10px]">
-                <div class="rounded-md border border-line bg-soft-bg p-2">
-                  <div class="font-medium text-naive">DROP TABLE prod/users</div>
-                  <div class="mt-0.5 text-muted">Naive: succeeded · 3 rows lost</div>
-                </div>
-                <div class="rounded-md border border-line bg-soft-bg p-2">
-                  <div class="font-medium text-kernel">Gate: DENIED</div>
-                  <div class="mt-0.5 text-muted">No matching rule. Default-deny.</div>
-                </div>
-              </div>
-            </div>
-            <div
-              aria-hidden="true"
-              class="pointer-events-none absolute -bottom-3 left-1/2 h-2 w-3/4 -translate-x-1/2 rounded-full bg-brand/20 blur-md"
-            ></div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Why -->
-    <section id="why" class="relative">
-      <div class="mx-auto max-w-6xl px-4 py-20 md:px-6 md:py-24">
-        <div class="grid items-start gap-10 md:grid-cols-3">
-          <div class="md:col-span-1">
-            <p class="text-[11px] font-semibold uppercase tracking-wider text-brand">
-              The problem
-            </p>
-            <h2 class="mt-2 text-3xl font-semibold tracking-tight">
-              Wrappers are convention. <br />
-              <span class="text-muted">Kernels are structure.</span>
-            </h2>
-          </div>
-          <div class="md:col-span-2 space-y-5 text-base leading-relaxed text-ink-soft">
-            <p>
-              When you give an LLM access to tools, nothing enforces what it can
-              actually do. The agent may misread instructions, be manipulated by
-              prompt injection, or simply make a mistake — and there is no layer
-              between it and the real world.
-            </p>
-            <p>
-              Most agent SDKs let you wrap a tool with a check. But wrappers can
-              be <em>forgotten</em>, <em>skipped</em>, or
-              <em>quietly bypassed</em>. The Agent OS Kernel makes the Gate
-              <strong>the only path</strong> to an action — there is no
-              alternative function to call.
-            </p>
-            <div class="grid gap-3 sm:grid-cols-2">
-              <div class="rounded-lg border-l-4 border-naive bg-naive-soft/40 p-4">
-                <div class="text-[11px] font-semibold uppercase tracking-wide text-naive">
-                  Without a kernel
-                </div>
-                <p class="mt-1.5 text-sm text-ink">
-                  A misread prompt runs <code class="rounded bg-white px-1 py-0.5 font-mono text-xs">DROP TABLE users</code>.
-                  No record of what was attempted, no rollback path, no scope
-                  limit on the blast radius.
-                </p>
-              </div>
-              <div class="rounded-lg border-l-4 border-kernel bg-kernel-soft/40 p-4">
-                <div class="text-[11px] font-semibold uppercase tracking-wide text-kernel">
-                  With the kernel
-                </div>
-                <p class="mt-1.5 text-sm text-ink">
-                  The same call is matched against policy → denied or allowed →
-                  written to an append-only log. Reversible writes can be undone
-                  in one call.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Invariants -->
-    <section id="invariants" class="relative bg-white">
-      <div class="mx-auto max-w-6xl px-4 py-20 md:px-6 md:py-24">
-        <div class="max-w-3xl">
-          <p class="text-[11px] font-semibold uppercase tracking-wider text-brand">
-            One API. Three invariants.
-          </p>
-          <h2 class="mt-2 text-3xl font-semibold tracking-tight">
-            Properties the architecture <em>cannot</em> drop.
-          </h2>
-          <p class="mt-3 text-base text-ink-soft">
-            <code class="rounded bg-soft-bg px-1.5 py-0.5 font-mono text-sm">kernel.submit()</code>
-            is the only public way to execute an action. <code class="rounded bg-soft-bg px-1.5 py-0.5 font-mono text-sm">ToolDef</code>
-            is metadata-only. There is no decorator to forget.
-          </p>
-        </div>
-        <div class="mt-10 grid gap-5 md:grid-cols-3">
-          <article class="group rounded-xl border border-line bg-soft-bg/40 p-6 transition hover:bg-white hover:shadow-md">
-            <div class="grid h-9 w-9 place-items-center rounded-lg bg-brand-soft text-brand">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="M12 2 4 6v6c0 5 3.5 9.5 8 10 4.5-.5 8-5 8-10V6Z"/><path d="m9 12 2 2 4-4"/></svg>
-            </div>
-            <h3 class="mt-4 text-lg font-semibold tracking-tight">
-              All access through Gate
-            </h3>
-            <p class="mt-1.5 text-sm leading-relaxed text-ink-soft">
-              <code class="font-mono">kernel.submit()</code> is the only code
-              path that executes tools — enforced structurally, not by
-              convention. There is no second function.
-            </p>
-          </article>
-          <article class="group rounded-xl border border-line bg-soft-bg/40 p-6 transition hover:bg-white hover:shadow-md">
-            <div class="grid h-9 w-9 place-items-center rounded-lg bg-naive-soft text-naive">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 14.14 14.14"/></svg>
-            </div>
-            <h3 class="mt-4 text-lg font-semibold tracking-tight">Default deny</h3>
-            <p class="mt-1.5 text-sm leading-relaxed text-ink-soft">
-              Actions not explicitly allowed in the YAML policy are blocked.
-              Glob resource patterns and constraints make rules expressive
-              without sacrificing the deny-default.
-            </p>
-          </article>
-          <article class="group rounded-xl border border-line bg-soft-bg/40 p-6 transition hover:bg-white hover:shadow-md">
-            <div class="grid h-9 w-9 place-items-center rounded-lg bg-kernel-soft text-kernel">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2Z"/><path d="M9 9h1M9 13h6M9 17h6"/></svg>
-            </div>
-            <h3 class="mt-4 text-lg font-semibold tracking-tight">No silent actions</h3>
-            <p class="mt-1.5 text-sm leading-relaxed text-ink-soft">
-              Every Gate decision — allowed or denied — produces exactly one
-              log record. Append-only, tamper-evident, with action, target,
-              status, duration, error.
-            </p>
-          </article>
-        </div>
-      </div>
-    </section>
-
-    <!-- Architecture -->
-    <section id="architecture" class="relative">
-      <div class="mx-auto max-w-6xl px-4 py-20 md:px-6 md:py-24">
-        <div class="grid items-center gap-12 md:grid-cols-2">
-          <div>
-            <p class="text-[11px] font-semibold uppercase tracking-wider text-brand">
-              Architecture
-            </p>
-            <h2 class="mt-2 text-3xl font-semibold tracking-tight">
-              Policy. Provider. Audit. Always in this order.
-            </h2>
-            <p class="mt-4 text-base leading-relaxed text-ink-soft">
-              Every <code class="font-mono">submit()</code> follows the same
-              three steps. The Reversible Action Layer wraps the kernel without
-              modifying it — so rollback requests pass through the Gate like
-              any other action.
-            </p>
-            <ul class="mt-6 space-y-3 text-sm leading-relaxed">
-              <li class="flex gap-3">
-                <span class="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-brand-soft text-[11px] font-semibold text-brand">1</span>
-                <span><strong>Policy check.</strong> The action is matched against the YAML capability list. Default deny.</span>
-              </li>
-              <li class="flex gap-3">
-                <span class="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-brand-soft text-[11px] font-semibold text-brand">2</span>
-                <span><strong>Provider execute.</strong> If allowed, the matching provider runs the action — filesystem, http, mcp, process.</span>
-              </li>
-              <li class="flex gap-3">
-                <span class="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-brand-soft text-[11px] font-semibold text-brand">3</span>
-                <span><strong>Audit write.</strong> One JSONL record. Always. Whether the action ran or was denied.</span>
-              </li>
-            </ul>
-          </div>
-          <figure class="relative">
-            <div class="rounded-xl border border-line bg-white p-3 shadow-sm">
-              <img
-                src="./assets/architecture.png"
-                alt="Agent OS Kernel architecture: AgentLoop → kernel.submit() → Policy → Provider → Audit"
-                class="h-auto w-full rounded-lg"
-                loading="lazy"
-              />
-            </div>
-          </figure>
-        </div>
-      </div>
-    </section>
-
-    <!-- Code example -->
-    <section id="code" class="relative bg-ink text-white">
-      <div class="mx-auto max-w-6xl px-4 py-20 md:px-6 md:py-24">
-        <div class="grid items-start gap-12 md:grid-cols-2">
-          <div>
-            <p class="text-[11px] font-semibold uppercase tracking-wider text-brand-soft/90">
-              Quick taste
-            </p>
-            <h2 class="mt-2 text-3xl font-semibold tracking-tight">
-              Five lines to a Gate.
-            </h2>
-            <p class="mt-3 text-base leading-relaxed text-white/70">
-              Direct kernel use first. The agent loop wraps the same
-              <code class="font-mono text-white">submit()</code> — the LLM
-              cannot bypass it.
-            </p>
-            <div class="mt-6 space-y-3 text-sm">
-              <div class="rounded-lg border border-white/10 bg-white/5 p-4">
-                <div class="text-[11px] font-semibold uppercase tracking-wide text-kernel-soft/80">
-                  Permitted
-                </div>
-                <p class="mt-1 font-mono text-xs text-white/80">
-                  fs.read /workspace/data.csv → <span class="text-kernel-soft">OK</span>
-                </p>
-              </div>
-              <div class="rounded-lg border border-white/10 bg-white/5 p-4">
-                <div class="text-[11px] font-semibold uppercase tracking-wide text-naive-soft/80">
-                  Denied
-                </div>
-                <p class="mt-1 font-mono text-xs text-white/80">
-                  fs.read /etc/passwd → <span class="text-naive-soft">DENIED</span>
-                </p>
-              </div>
-              <div class="rounded-lg border border-white/10 bg-white/5 p-4">
-                <div class="text-[11px] font-semibold uppercase tracking-wide text-warn-soft/80">
-                  Reversible
-                </div>
-                <p class="mt-1 font-mono text-xs text-white/80">
-                  layer.rollback(record_id) → <span class="text-warn-soft">file restored</span>
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div class="rounded-xl border border-white/10 bg-black/40 p-1 shadow-2xl">
-            <div class="flex items-center justify-between rounded-t-lg border-b border-white/10 bg-white/5 px-3 py-1.5">
-              <div class="flex items-center gap-1.5">
-                <span class="h-2.5 w-2.5 rounded-full bg-naive/80"></span>
-                <span class="h-2.5 w-2.5 rounded-full bg-warn/80"></span>
-                <span class="h-2.5 w-2.5 rounded-full bg-kernel/80"></span>
-              </div>
-              <span class="font-mono text-[10px] uppercase tracking-wide text-white/40">
-                hello_kernel.py
+    <main id="main">
+      <section id="top" class="relative overflow-hidden bg-soft-bg">
+        <div class="absolute inset-0 grid-bg opacity-70" aria-hidden="true"></div>
+        <div class="relative mx-auto max-w-6xl px-4 py-16 md:px-6 md:py-20 lg:py-24">
+          <div class="grid items-center gap-10 lg:grid-cols-[1fr_1.02fr] lg:gap-14">
+            <div class="reveal in">
+              <span class="pill">
+                <span class="h-1.5 w-1.5 rounded-full bg-brand"></span>
+                v0.4.3 - PyPI package
               </span>
+              <h1
+                class="mt-5 min-h-[11.2rem] max-w-2xl text-5xl font-semibold leading-[1.05] tracking-tight text-ink md:min-h-[12.5rem] md:text-6xl"
+              >
+                If your AI assistant tries to delete the production database, who stops it?
+              </h1>
+              <p class="mt-5 max-w-xl text-lg leading-relaxed text-ink-soft md:text-xl">
+                Agent OS Kernel is a safety gate for AI agents. Every action gets checked first,
+                executed only if allowed, and recorded either way.
+              </p>
+              <div class="mt-7 flex flex-col gap-3 sm:flex-row">
+                <a
+                  id="watch-blocked"
+                  href="#try-it"
+                  class="inline-flex items-center justify-center gap-2 rounded-md bg-brand px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-deep"
+                >
+                  <svg viewBox="0 0 24 24" class="h-4 w-4" fill="currentColor" aria-hidden="true">
+                    <path d="M8 5v14l11-7Z" />
+                  </svg>
+                  Watch one get blocked
+                </a>
+                <a
+                  id="developer-jump"
+                  href="#for-devs"
+                  class="inline-flex items-center justify-center gap-2 rounded-md border border-line bg-white px-4 py-2.5 text-sm font-semibold text-ink hover:bg-soft-bg"
+                >
+                  I'm a developer ->
+                </a>
+              </div>
+              <dl class="mt-8 grid max-w-xl gap-3 text-sm text-muted sm:grid-cols-3">
+                <div class="rounded-lg border border-line bg-white px-3 py-3">
+                  <dt class="font-medium">Decision overhead</dt>
+                  <dd class="mt-1 font-semibold text-ink">Negligible</dd>
+                </div>
+                <div class="rounded-lg border border-line bg-white px-3 py-3">
+                  <dt class="font-medium">Test coverage</dt>
+                  <dd class="mt-1 font-semibold tabular-nums text-ink">96%</dd>
+                </div>
+                <div class="rounded-lg border border-line bg-white px-3 py-3">
+                  <dt class="font-medium">Built-in providers</dt>
+                  <dd class="mt-1 font-semibold tabular-nums text-ink">4</dd>
+                </div>
+              </dl>
             </div>
-            <pre class="overflow-x-auto rounded-b-lg p-5"><code class="language-python">from agent_os_kernel import Kernel, ActionRequest
-from agent_os_kernel.providers.filesystem import FilesystemProvider
 
-with Kernel(
-    policy="policy.yaml",
-    providers=[FilesystemProvider()],
-    log_path="kernel.log",
-) as kernel:
-    ok = kernel.submit(
-        ActionRequest(action="fs.read", target="/workspace/data.csv")
-    )
-    print(ok.status)        # OK
-
-    denied = kernel.submit(
-        ActionRequest(action="fs.read", target="/etc/passwd")
-    )
-    print(denied.status)    # DENIED — default-deny
-</code></pre>
+            <div class="hero-video media-shell aspect-[16/10]">
+              <video
+                id="hero-video"
+                autoplay
+                muted
+                loop
+                playsinline
+                preload="metadata"
+                poster="./assets/hero-loop-poster.png"
+                aria-label="Animation showing the gate blocking a dangerous database action"
+              >
+                <source src="./assets/hero-loop.webm" type="video/webm" />
+              </video>
+              <button type="button" class="play-fallback" id="hero-play">Play replay</button>
+            </div>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <!-- Workbench callout -->
-    <section id="workbench" class="relative bg-soft-bg">
-      <div class="mx-auto max-w-6xl px-4 py-20 md:px-6 md:py-24">
-        <div class="rounded-2xl border border-line bg-white p-8 shadow-sm md:p-12">
-          <div class="grid items-center gap-10 md:grid-cols-[1fr_320px]">
+      <section id="why" class="bg-alarm-bg text-alarm-text">
+        <div class="section-shell">
+          <div class="max-w-3xl">
+            <span class="inline-flex rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-alarm-text">
+              Why this is urgent
+            </span>
+            <h2 class="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">
+              AI agents are doing more dangerous things than you think.
+            </h2>
+            <p class="mt-4 max-w-2xl text-base leading-relaxed text-alarm-text/80">
+              A helpful assistant can still be fooled, rushed, or mistaken. The gate is the
+              checkpoint between a suggestion and a real-world action.
+            </p>
+          </div>
+
+          <div class="reveal mt-10 grid gap-5 lg:grid-cols-3">
+            <article class="stakes-card">
+              <img src="./assets/icons/stakes-db.svg" alt="" loading="lazy" />
+              <h3 class="mt-4 text-xl font-semibold text-alarm-text">
+                One command, entire production database gone
+              </h3>
+              <p class="mt-3 text-sm leading-relaxed text-alarm-text/80">
+                A Replit AI agent deleted a company's production database, wiping executive
+                records and company data, then fabricated replacement data.
+              </p>
+              <a
+                href="https://www.tomshardware.com/tech-industry/artificial-intelligence/ai-coding-platform-goes-rogue-during-code-freeze-and-deletes-entire-company-database"
+                target="_blank"
+                rel="noopener"
+                class="mt-4 inline-flex text-xs font-semibold italic text-red-300 hover:text-white"
+                >Replit / SaaStr incident, July 2025</a
+              >
+            </article>
+            <article class="stakes-card">
+              <img src="./assets/icons/stakes-leak.svg" alt="" loading="lazy" />
+              <h3 class="mt-4 text-xl font-semibold text-alarm-text">
+                A hidden message in your inbox steals your secrets
+              </h3>
+              <p class="mt-3 text-sm leading-relaxed text-alarm-text/80">
+                Instructions hidden inside comments, emails, or pages can convince an assistant
+                to send secrets to an attacker-controlled URL.
+              </p>
+              <a
+                href="https://genai.owasp.org/llmrisk/llm01-prompt-injection/"
+                target="_blank"
+                rel="noopener"
+                class="mt-4 inline-flex text-xs font-semibold italic text-red-300 hover:text-white"
+                >OWASP LLM01: Prompt Injection</a
+              >
+            </article>
+            <article class="stakes-card">
+              <img src="./assets/icons/stakes-phish.svg" alt="" loading="lazy" />
+              <h3 class="mt-4 text-xl font-semibold text-alarm-text">
+                A single web page can hijack a browser agent
+              </h3>
+              <p class="mt-3 text-sm leading-relaxed text-alarm-text/80">
+                A booby-trapped page can tell a browser agent to forward codes, visit a risky
+                endpoint, or take actions the user never asked for.
+              </p>
+              <a
+                href="https://brave.com/blog/comet-prompt-injection/"
+                target="_blank"
+                rel="noopener"
+                class="mt-4 inline-flex text-xs font-semibold italic text-red-300 hover:text-white"
+                >Brave Browser security research, 2025</a
+              >
+            </article>
+          </div>
+
+          <div class="mt-10">
+            <a
+              href="#try-it"
+              class="inline-flex items-center justify-center rounded-md bg-brand px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-black/20 hover:bg-brand-deep"
+              >See how Kernel blocks these -></a
+            >
+          </div>
+        </div>
+      </section>
+
+      <section id="try-it" class="bg-white">
+        <div class="section-shell">
+          <div class="grid gap-10 lg:grid-cols-[0.9fr_1.35fr] lg:items-start">
             <div>
-              <p class="text-[11px] font-semibold uppercase tracking-wider text-brand">
-                Interactive workbench
-              </p>
-              <h2 class="mt-2 text-3xl font-semibold tracking-tight">
-                See the Gate in motion.
+              <span class="pill">Try it yourself</span>
+              <h2 class="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">
+                Click once. Watch the gate stop the AI.
               </h2>
-              <p class="mt-3 max-w-xl text-base leading-relaxed text-ink-soft">
-                Run a "dangerous DB cleanup" scenario side-by-side. The
-                workbench compares a naive runtime against the kernel — same
-                LLM, same tools, different invariants — and exposes
-                <strong>policy rule trace</strong>, <strong>reversible
-                rollback</strong>, and a <strong>performance gantt</strong> for
-                every Gate decision.
+              <p class="mt-4 text-base leading-relaxed text-ink-soft">
+                This is a static replay that works on GitHub Pages. If you are running the local
+                demo backend, the page will use the live event stream instead.
               </p>
-              <div class="mt-6 flex flex-wrap items-center gap-3">
-                <a
-                  href="https://github.com/JiahaoZhang-Public/agent-kernel/tree/main/demo"
-                  target="_blank"
-                  rel="noopener"
-                  class="inline-flex items-center gap-2 rounded-md bg-ink px-4 py-2.5 text-sm font-medium text-white hover:bg-ink-soft"
-                >
-                  Run the workbench locally
-                </a>
+              <div
+                id="backend-status"
+                class="mt-5 inline-flex rounded-full border border-line bg-soft-bg px-3 py-1 text-xs font-semibold text-muted"
+              >
+                Checking for local backend...
+              </div>
+            </div>
+
+            <article class="rounded-2xl border border-line bg-soft-bg p-4 shadow-float md:p-5">
+              <div class="rounded-xl border border-line bg-white p-4">
+                <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                  <div class="min-w-0 flex-1">
+                    <div class="text-xs font-semibold uppercase tracking-wide text-muted">
+                      Pick a scenario
+                    </div>
+                    <div id="scenario-picker" class="mt-3 grid gap-2 sm:grid-cols-3"></div>
+                  </div>
+                  <div class="flex gap-2">
+                    <button
+                      id="run-scenario"
+                      type="button"
+                      class="inline-flex items-center justify-center gap-2 rounded-md bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-deep disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <svg viewBox="0 0 24 24" class="h-4 w-4" fill="currentColor" aria-hidden="true">
+                        <path d="M8 5v14l11-7Z" />
+                      </svg>
+                      <span>Run</span>
+                    </button>
+                    <button
+                      id="reset-scenario"
+                      type="button"
+                      class="rounded-md border border-line bg-white px-4 py-2.5 text-sm font-semibold hover:bg-soft-bg"
+                    >
+                      Reset
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="mt-4 grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
+                <div class="rounded-xl border border-line bg-white p-4">
+                  <div class="flex items-center justify-between gap-3">
+                    <h3 class="text-sm font-semibold tracking-tight">Timeline</h3>
+                    <span id="run-state" class="text-xs font-semibold text-muted">Ready</span>
+                  </div>
+                  <ol id="timeline-list" class="timeline mt-4" aria-label="Scenario timeline"></ol>
+                  <div id="live-region" class="sr-only" aria-live="polite"></div>
+                </div>
+
+                <div>
+                  <div class="mobile-tabs mb-2 grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      class="panel-tab rounded-md bg-ink px-3 py-2 text-xs font-semibold text-white"
+                      data-panel-tab="decision"
+                    >
+                      Decision
+                    </button>
+                    <button
+                      type="button"
+                      class="panel-tab rounded-md border border-line bg-white px-3 py-2 text-xs font-semibold"
+                      data-panel-tab="audit"
+                    >
+                      Audit Log
+                    </button>
+                  </div>
+
+                  <div id="decision-panel" class="mobile-panel active">
+                    <div id="decision-card" class="decision-card rounded-xl border border-line bg-white p-4 transition">
+                      <div class="flex items-center justify-between gap-3">
+                        <h3 class="text-sm font-semibold tracking-tight">Gate decision</h3>
+                        <span
+                          id="decision-status"
+                          class="rounded-full bg-soft-bg px-2.5 py-1 text-xs font-semibold text-muted"
+                          >Idle</span
+                        >
+                      </div>
+                      <dl class="mt-4 grid gap-3 text-sm">
+                        <div>
+                          <dt class="text-xs font-semibold uppercase tracking-wide text-muted">Action</dt>
+                          <dd id="decision-action" class="mt-1 font-mono text-ink">-</dd>
+                        </div>
+                        <div>
+                          <dt class="text-xs font-semibold uppercase tracking-wide text-muted">Target</dt>
+                          <dd id="decision-target" class="mt-1 break-all font-mono text-ink">-</dd>
+                        </div>
+                        <div>
+                          <dt class="text-xs font-semibold uppercase tracking-wide text-muted">Reason</dt>
+                          <dd id="decision-reason" class="mt-1 leading-relaxed text-ink-soft">
+                            Ready - click Run to start.
+                          </dd>
+                        </div>
+                      </dl>
+                    </div>
+                  </div>
+
+                  <div id="audit-panel" class="mobile-panel mt-4 sm:block">
+                    <div class="rounded-xl border border-line bg-ink p-4 text-white">
+                      <div class="flex items-center justify-between gap-3">
+                        <h3 class="text-sm font-semibold tracking-tight">Audit log</h3>
+                        <span class="text-xs text-white/50">append-only</span>
+                      </div>
+                      <div id="audit-log" class="mt-4 min-h-40 space-y-2 font-mono text-xs text-white/75">
+                        <div class="text-white/45">Ready - no decisions recorded yet.</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="mt-4 rounded-xl border border-line bg-white p-4 text-sm text-ink-soft">
+                Want it for real?
+                <a href="#install" class="font-semibold text-brand hover:underline">Install</a>
+                or open the
                 <a
                   href="https://github.com/JiahaoZhang-Public/agent-kernel/blob/main/demo/README.md"
                   target="_blank"
                   rel="noopener"
-                  class="inline-flex items-center gap-2 text-sm font-medium text-brand hover:underline"
-                >
-                  Workbench README →
-                </a>
+                  class="font-semibold text-brand hover:underline"
+                  >demo README</a
+                >.
               </div>
-              <ul class="mt-7 grid gap-3 text-sm sm:grid-cols-3">
-                <li class="rounded-md border border-line bg-soft-bg/60 px-3 py-2">
-                  <span class="text-[10px] font-semibold uppercase tracking-wide text-muted">Sell-point #1</span>
-                  <div class="mt-0.5 font-medium">Policy rule trace</div>
-                </li>
-                <li class="rounded-md border border-line bg-soft-bg/60 px-3 py-2">
-                  <span class="text-[10px] font-semibold uppercase tracking-wide text-muted">Sell-point #2</span>
-                  <div class="mt-0.5 font-medium">Reversible rollback</div>
-                </li>
-                <li class="rounded-md border border-line bg-soft-bg/60 px-3 py-2">
-                  <span class="text-[10px] font-semibold uppercase tracking-wide text-muted">Sell-point #3</span>
-                  <div class="mt-0.5 font-medium">Performance gantt</div>
-                </li>
-              </ul>
-            </div>
-
-            <div class="rounded-xl border border-line bg-soft-bg/60 p-4">
-              <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">
-                One-shot run
-              </div>
-              <pre class="mt-2 overflow-x-auto rounded-lg bg-ink p-4 text-white"><code class="language-bash">$ uvicorn demo.backend.app:app --port 8000 &
-$ cd demo/frontend && npm run dev
-
-# open http://127.0.0.1:5173</code></pre>
-              <div class="mt-4 grid grid-cols-2 gap-2 text-[11px]">
-                <div class="rounded border border-line bg-white px-2 py-1.5">
-                  <div class="text-muted">Naive</div>
-                  <div class="font-mono">4 rows lost</div>
-                </div>
-                <div class="rounded border border-kernel/40 bg-kernel-soft/40 px-2 py-1.5">
-                  <div class="text-kernel">Kernel</div>
-                  <div class="font-mono">5 rows preserved</div>
-                </div>
-              </div>
-            </div>
+            </article>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <!-- Features -->
-    <section id="features" class="relative bg-white">
-      <div class="mx-auto max-w-6xl px-4 py-20 md:px-6 md:py-24">
-        <p class="text-[11px] font-semibold uppercase tracking-wider text-brand">
-          Inside the kernel
-        </p>
-        <h2 class="mt-2 text-3xl font-semibold tracking-tight">
-          Small surface, strong guarantees.
-        </h2>
-        <div class="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          <div class="rounded-lg border border-line bg-soft-bg/40 p-5">
-            <h3 class="text-sm font-semibold tracking-tight">Structural Gate</h3>
-            <p class="mt-1 text-sm text-ink-soft">
-              <code class="font-mono">kernel.submit()</code> is the sole tool execution path.
-              <code class="font-mono">ToolDef</code> is pure metadata.
-            </p>
-          </div>
-          <div class="rounded-lg border border-line bg-soft-bg/40 p-5">
-            <h3 class="text-sm font-semibold tracking-tight">YAML policy</h3>
-            <p class="mt-1 text-sm text-ink-soft">
-              Allow-list with glob resource matching and constraint support.
-              Default deny.
-            </p>
-          </div>
-          <div class="rounded-lg border border-line bg-soft-bg/40 p-5">
-            <h3 class="text-sm font-semibold tracking-tight">Append-only audit</h3>
-            <p class="mt-1 text-sm text-ink-soft">
-              Tamper-evident JSONL. Status, duration, error, record_id —
-              every <code class="font-mono">submit()</code> recorded.
-            </p>
-          </div>
-          <div class="rounded-lg border border-line bg-soft-bg/40 p-5">
-            <h3 class="text-sm font-semibold tracking-tight">Reversible Layer</h3>
-            <p class="mt-1 text-sm text-ink-soft">
-              Snapshot-and-rollback for write operations. Wraps the kernel
-              without modifying it.
-            </p>
-          </div>
-          <div class="rounded-lg border border-line bg-soft-bg/40 p-5">
-            <h3 class="text-sm font-semibold tracking-tight">4 built-in providers</h3>
-            <p class="mt-1 text-sm text-ink-soft">
-              Filesystem, process, HTTP, MCP (Model Context Protocol).
-            </p>
-          </div>
-          <div class="rounded-lg border border-line bg-soft-bg/40 p-5">
-            <h3 class="text-sm font-semibold tracking-tight">100+ LLM providers</h3>
-            <p class="mt-1 text-sm text-ink-soft">
-              LiteLLM-powered: OpenAI, Anthropic, Ollama, Azure, and more.
-            </p>
-          </div>
-          <div class="rounded-lg border border-line bg-soft-bg/40 p-5">
-            <h3 class="text-sm font-semibold tracking-tight">CLI</h3>
-            <p class="mt-1 text-sm text-ink-soft">
-              <code class="font-mono">submit · log · validate-policy · version</code>
-            </p>
-          </div>
-          <div class="rounded-lg border border-line bg-soft-bg/40 p-5">
-            <h3 class="text-sm font-semibold tracking-tight">High throughput</h3>
-            <p class="mt-1 text-sm text-ink-soft">
-              77,000+ ops/s. p99 &lt; 0.1 ms. The Gate is not the bottleneck.
-            </p>
-          </div>
-          <div class="rounded-lg border border-line bg-soft-bg/40 p-5">
-            <h3 class="text-sm font-semibold tracking-tight">Auditable core</h3>
-            <p class="mt-1 text-sm text-ink-soft">
-              ~1,600 lines of kernel source. Small enough to read end-to-end.
-            </p>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Install -->
-    <section id="install" class="relative">
-      <div class="mx-auto max-w-6xl px-4 py-20 md:px-6 md:py-24">
-        <div class="grid items-center gap-12 md:grid-cols-[1fr_1.4fr]">
-          <div>
-            <p class="text-[11px] font-semibold uppercase tracking-wider text-brand">
-              Install
-            </p>
-            <h2 class="mt-2 text-3xl font-semibold tracking-tight">
-              One pip away.
+      <section id="how-it-works" class="bg-soft-bg">
+        <div class="section-shell">
+          <div class="mx-auto max-w-3xl text-center">
+            <span class="pill">How it works</span>
+            <h2 class="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">
+              Three steps, always in the same order.
             </h2>
-            <p class="mt-3 text-ink-soft">
-              Python 3.10+. Zero runtime dependencies in the kernel core. Works
-              with any LiteLLM-compatible provider.
+            <p class="mt-4 text-base leading-relaxed text-ink-soft">
+              Think of it like airport security for AI actions: check the rules, let approved
+              actions through, and keep a record of every decision.
             </p>
-            <div class="mt-5 flex flex-wrap gap-3 text-sm">
-              <a
-                href="https://pypi.org/project/py-agent-kernel/"
-                target="_blank"
-                rel="noopener"
-                class="rounded-md border border-line bg-white px-3 py-2 font-medium hover:bg-soft-bg"
-                >PyPI</a
-              >
-              <a
-                href="https://agent-kernel.readthedocs.io/en/latest/"
-                target="_blank"
-                rel="noopener"
-                class="rounded-md border border-line bg-white px-3 py-2 font-medium hover:bg-soft-bg"
-                >Docs</a
-              >
-              <a
-                href="https://github.com/JiahaoZhang-Public/agent-kernel/tree/main/examples"
-                target="_blank"
-                rel="noopener"
-                class="rounded-md border border-line bg-white px-3 py-2 font-medium hover:bg-soft-bg"
-                >30 Examples</a
-              >
-            </div>
           </div>
-          <div class="space-y-4">
-            <div class="rounded-xl border border-line bg-white p-5 shadow-sm">
-              <div class="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                pip
+
+          <div class="reveal mx-auto mt-10 grid max-w-5xl gap-5 md:grid-cols-3">
+            <article class="how-card rounded-2xl border border-line bg-white p-6 shadow-sm" tabindex="0">
+              <div class="grid h-10 w-10 place-items-center rounded-lg bg-brand-soft text-sm font-bold text-brand">
+                1
               </div>
-              <pre class="mt-2 overflow-x-auto"><code class="language-bash">pip install py-agent-kernel</code></pre>
+              <h3 class="mt-4 text-xl font-semibold">Check</h3>
+              <p class="mt-2 text-sm leading-relaxed text-ink-soft">
+                Match the requested action against the rules you wrote. Is this allowed?
+              </p>
+              <div class="dev-truth mt-3 border-t border-line pt-3 text-xs leading-relaxed text-muted">
+                YAML policy match, glob resource patterns, blocked unless explicitly allowed.
+              </div>
+            </article>
+
+            <article class="how-card rounded-2xl border border-line bg-white p-6 shadow-sm" tabindex="0">
+              <div class="grid h-10 w-10 place-items-center rounded-lg bg-kernel-soft text-sm font-bold text-kernel">
+                2
+              </div>
+              <h3 class="mt-4 text-xl font-semibold">Execute</h3>
+              <p class="mt-2 text-sm leading-relaxed text-ink-soft">
+                If the action is allowed, the gate hands it to the tool that does the real work.
+              </p>
+              <div class="dev-truth mt-3 border-t border-line pt-3 text-xs leading-relaxed text-muted">
+                One provider runs the action: filesystem, HTTP, process, or MCP.
+              </div>
+            </article>
+
+            <article class="how-card rounded-2xl border border-line bg-white p-6 shadow-sm" tabindex="0">
+              <div class="grid h-10 w-10 place-items-center rounded-lg bg-warn-soft text-sm font-bold text-warn">
+                3
+              </div>
+              <h3 class="mt-4 text-xl font-semibold">Record</h3>
+              <p class="mt-2 text-sm leading-relaxed text-ink-soft">
+                Whether the action ran or was blocked, one log line is written for later review.
+              </p>
+              <div class="dev-truth mt-3 border-t border-line pt-3 text-xs leading-relaxed text-muted">
+                Append-only JSONL with record_id, status, duration, target, and error.
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="watch" class="bg-white">
+        <div class="section-shell">
+          <div class="mx-auto max-w-3xl text-center">
+            <span class="pill">Watch it run</span>
+            <h2 class="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">
+              A guided replay for people who would rather watch.
+            </h2>
+            <p class="mt-4 text-base leading-relaxed text-ink-soft">
+              The video is lazy-loaded, captioned, and safe to watch muted.
+            </p>
+          </div>
+          <div class="media-shell mx-auto mt-10 aspect-video max-w-5xl">
+            <video id="walkthrough-video" controls preload="none" poster="./assets/walkthrough-poster.png">
+              <source src="./assets/walkthrough.webm" type="video/webm" />
+              <track kind="captions" srclang="en" src="./assets/walkthrough.en.vtt" default />
+            </video>
+          </div>
+          <div class="mx-auto mt-4 flex max-w-5xl flex-wrap items-center justify-between gap-3 text-sm">
+            <div class="flex flex-wrap gap-2">
+              <button class="chapter rounded-md border border-line bg-white px-3 py-2 font-semibold hover:bg-soft-bg" data-time="0">
+                Intro
+              </button>
+              <button class="chapter rounded-md border border-line bg-white px-3 py-2 font-semibold hover:bg-soft-bg" data-time="4">
+                Launch
+              </button>
+              <button class="chapter rounded-md border border-line bg-white px-3 py-2 font-semibold hover:bg-soft-bg" data-time="8">
+                Block
+              </button>
             </div>
-            <div class="rounded-xl border border-line bg-white p-5 shadow-sm">
-              <div class="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                uv
+            <label class="flex items-center gap-2 text-muted">
+              Speed
+              <select id="playback-speed" class="rounded-md border border-line bg-white px-2 py-1.5 text-ink">
+                <option value="0.75">0.75x</option>
+                <option value="1" selected>1x</option>
+                <option value="1.25">1.25x</option>
+                <option value="1.5">1.5x</option>
+              </select>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <section id="for-devs" class="bg-soft-bg">
+        <div class="section-shell">
+          <div class="rounded-2xl border border-line bg-white p-6 shadow-sm md:p-8">
+            <div class="grid gap-5 md:grid-cols-[1fr_auto] md:items-center">
+              <div>
+                <span class="pill">For developers</span>
+                <h2 class="mt-4 text-2xl font-semibold tracking-tight md:text-3xl">
+                  Show technical details.
+                </h2>
+                <p class="mt-2 text-sm leading-relaxed text-ink-soft">
+                  Three invariants, a five-line example, nine core features, architecture diagram,
+                  and benchmarks.
+                </p>
               </div>
-              <pre class="mt-2 overflow-x-auto"><code class="language-bash">uv add py-agent-kernel</code></pre>
+              <button
+                id="dev-toggle"
+                type="button"
+                class="inline-flex items-center justify-center rounded-md bg-ink px-4 py-2.5 text-sm font-semibold text-white hover:bg-ink-soft"
+                aria-expanded="false"
+                aria-controls="dev-panel"
+              >
+                Expand
+              </button>
             </div>
-            <div class="rounded-xl border border-line bg-white p-5 shadow-sm">
-              <div class="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                from source
+
+            <div id="dev-panel" class="dev-panel">
+              <div class="mt-8 grid gap-5 md:grid-cols-3">
+                <article class="rounded-xl border border-line bg-soft-bg p-5">
+                  <h3 class="font-semibold">All access through Gate</h3>
+                  <p class="mt-2 text-sm leading-relaxed text-ink-soft">
+                    <code class="font-mono">kernel.submit()</code> is the only execution path.
+                    <code class="font-mono">ToolDef</code> is metadata-only.
+                  </p>
+                </article>
+                <article class="rounded-xl border border-line bg-soft-bg p-5">
+                  <h3 class="font-semibold">Default deny</h3>
+                  <p class="mt-2 text-sm leading-relaxed text-ink-soft">
+                    Actions not explicitly allowed in the YAML policy are blocked. Resource glob
+                    patterns keep the policy expressive.
+                  </p>
+                </article>
+                <article class="rounded-xl border border-line bg-soft-bg p-5">
+                  <h3 class="font-semibold">No silent actions</h3>
+                  <p class="mt-2 text-sm leading-relaxed text-ink-soft">
+                    Every decision produces one audit record with action, target, status,
+                    duration, and error.
+                  </p>
+                </article>
               </div>
-              <pre class="mt-2 overflow-x-auto"><code class="language-bash">git clone https://github.com/JiahaoZhang-Public/agent-kernel.git
-cd agent-kernel && pip install -e .</code></pre>
+
+              <div class="mt-8 grid gap-6 lg:grid-cols-2">
+                <div class="rounded-xl border border-line bg-ink p-1 text-white shadow-2xl">
+                  <div class="flex items-center justify-between rounded-t-lg border-b border-white/10 bg-white/5 px-3 py-1.5">
+                    <div class="flex items-center gap-1.5">
+                      <span class="h-2.5 w-2.5 rounded-full bg-naive/80"></span>
+                      <span class="h-2.5 w-2.5 rounded-full bg-warn/80"></span>
+                      <span class="h-2.5 w-2.5 rounded-full bg-kernel/80"></span>
+                    </div>
+                    <span class="font-mono text-[10px] uppercase tracking-wide text-white/45">
+                      hello_kernel.py
+                    </span>
+                  </div>
+                  <pre class="overflow-x-auto rounded-b-lg p-5"><code class="language-python">from agent_os_kernel import Kernel, ActionRequest
+from agent_os_kernel.providers.filesystem import FilesystemProvider
+
+with Kernel("policy.yaml", [FilesystemProvider()], "kernel.log") as kernel:
+    ok = kernel.submit(ActionRequest(action="fs.read", target="/workspace/data.csv"))
+    denied = kernel.submit(ActionRequest(action="fs.read", target="/etc/passwd"))
+
+print(ok.status, denied.status)</code></pre>
+                </div>
+
+                <figure class="rounded-xl border border-line bg-soft-bg p-3">
+                  <img
+                    src="./assets/architecture.png"
+                    alt="Agent OS Kernel architecture: AgentLoop to kernel submit to policy, provider, and audit"
+                    class="h-auto w-full rounded-lg"
+                    loading="lazy"
+                  />
+                </figure>
+              </div>
+
+              <div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <div class="rounded-lg border border-line bg-soft-bg p-4">
+                  <h3 class="text-sm font-semibold">Structural Gate</h3>
+                  <p class="mt-1 text-sm text-ink-soft">The public execution path is intentionally small.</p>
+                </div>
+                <div class="rounded-lg border border-line bg-soft-bg p-4">
+                  <h3 class="text-sm font-semibold">YAML policy</h3>
+                  <p class="mt-1 text-sm text-ink-soft">Allow-list with glob matching and constraints.</p>
+                </div>
+                <div class="rounded-lg border border-line bg-soft-bg p-4">
+                  <h3 class="text-sm font-semibold">Append-only audit</h3>
+                  <p class="mt-1 text-sm text-ink-soft">Tamper-evident JSONL for each decision.</p>
+                </div>
+                <div class="rounded-lg border border-line bg-soft-bg p-4">
+                  <h3 class="text-sm font-semibold">One-click rollback</h3>
+                  <p class="mt-1 text-sm text-ink-soft">Snapshot-and-restore for reversible writes.</p>
+                </div>
+                <div class="rounded-lg border border-line bg-soft-bg p-4">
+                  <h3 class="text-sm font-semibold">4 built-in providers</h3>
+                  <p class="mt-1 text-sm text-ink-soft">Filesystem, process, HTTP, and MCP.</p>
+                </div>
+                <div class="rounded-lg border border-line bg-soft-bg p-4">
+                  <h3 class="text-sm font-semibold">100+ LLM providers</h3>
+                  <p class="mt-1 text-sm text-ink-soft">LiteLLM routing for OpenAI, Anthropic, Ollama, Azure, and more.</p>
+                </div>
+                <div class="rounded-lg border border-line bg-soft-bg p-4">
+                  <h3 class="text-sm font-semibold">CLI</h3>
+                  <p class="mt-1 font-mono text-sm text-ink-soft">submit · log · validate-policy · version</p>
+                </div>
+                <div class="rounded-lg border border-line bg-soft-bg p-4">
+                  <h3 class="text-sm font-semibold">High throughput</h3>
+                  <p class="mt-1 text-sm text-ink-soft">77,000+ ops/s. p99 &lt; 0.1 ms.</p>
+                </div>
+                <div class="rounded-lg border border-line bg-soft-bg p-4">
+                  <h3 class="text-sm font-semibold">Auditable core</h3>
+                  <p class="mt-1 text-sm text-ink-soft">Small enough to read end to end.</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <!-- Footer -->
+      <section id="install" class="bg-white">
+        <div class="section-shell">
+          <div class="grid items-center gap-12 md:grid-cols-[1fr_1.4fr]">
+            <div>
+              <span class="pill">Install</span>
+              <h2 class="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">One pip away.</h2>
+              <p class="mt-3 leading-relaxed text-ink-soft">
+                Not a coder, just looking around? The <a href="#try-it" class="font-semibold text-brand hover:underline">Try It</a>
+                section above does it without installing anything.
+              </p>
+              <p class="mt-3 leading-relaxed text-ink-soft">
+                Want to wire it into your own project? Python 3.10+. Zero runtime dependencies in
+                the kernel core. Works with any LiteLLM-compatible provider.
+              </p>
+              <div class="mt-5 flex flex-wrap gap-3 text-sm">
+                <a
+                  href="https://pypi.org/project/py-agent-kernel/"
+                  target="_blank"
+                  rel="noopener"
+                  class="rounded-md border border-line bg-white px-3 py-2 font-medium hover:bg-soft-bg"
+                  >PyPI</a
+                >
+                <a
+                  href="https://agent-kernel.readthedocs.io/en/latest/"
+                  target="_blank"
+                  rel="noopener"
+                  class="rounded-md border border-line bg-white px-3 py-2 font-medium hover:bg-soft-bg"
+                  >Docs</a
+                >
+                <a
+                  href="https://github.com/JiahaoZhang-Public/agent-kernel/tree/main/examples"
+                  target="_blank"
+                  rel="noopener"
+                  class="rounded-md border border-line bg-white px-3 py-2 font-medium hover:bg-soft-bg"
+                  >30 Examples</a
+                >
+              </div>
+            </div>
+
+            <div class="min-w-0 space-y-4">
+              <div class="rounded-xl border border-line bg-soft-bg p-5 shadow-sm">
+                <div class="text-xs font-semibold uppercase tracking-wide text-muted">pip</div>
+                <pre class="mt-2 overflow-x-auto"><code class="language-bash">pip install py-agent-kernel</code></pre>
+              </div>
+              <div class="rounded-xl border border-line bg-soft-bg p-5 shadow-sm">
+                <div class="text-xs font-semibold uppercase tracking-wide text-muted">uv</div>
+                <pre class="mt-2 overflow-x-auto"><code class="language-bash">uv add py-agent-kernel</code></pre>
+              </div>
+              <div class="rounded-xl border border-line bg-soft-bg p-5 shadow-sm">
+                <div class="text-xs font-semibold uppercase tracking-wide text-muted">from source</div>
+                <pre class="mt-2 overflow-x-auto"><code class="language-bash">git clone https://github.com/JiahaoZhang-Public/agent-kernel.git
+cd agent-kernel && pip install -e .</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
     <footer class="border-t border-line bg-white">
       <div class="mx-auto flex max-w-6xl flex-col items-start justify-between gap-5 px-4 py-10 text-sm md:flex-row md:items-center md:px-6">
         <div class="flex items-center gap-3 text-muted">
           <span class="grid h-7 w-7 place-items-center rounded-md bg-brand-soft text-brand">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="M12 2 4 6v6c0 5 3.5 9.5 8 10 4.5-.5 8-5 8-10V6Z"/></svg>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="h-4 w-4"
+              aria-hidden="true"
+            >
+              <path d="M12 2 4 6v6c0 5 3.5 9.5 8 10 4.5-.5 8-5 8-10V6Z" />
+            </svg>
           </span>
           <span>
-            Agent OS Kernel · MIT License · Maintained by
-            <a href="https://github.com/JiahaoZhang-Public" class="text-ink hover:text-brand" target="_blank" rel="noopener">@JiahaoZhang-Public</a>
+            Agent OS Kernel - MIT License - Maintained by
+            <a
+              href="https://github.com/JiahaoZhang-Public"
+              class="text-ink hover:text-brand"
+              target="_blank"
+              rel="noopener"
+              >@JiahaoZhang-Public</a
+            >
           </span>
         </div>
         <div class="flex flex-wrap items-center gap-5">
@@ -832,19 +1133,668 @@ cd agent-kernel && pip install -e .</code></pre>
     </footer>
 
     <script>
-      hljs.highlightAll();
-      const obs = new IntersectionObserver(
-        (entries) => {
-          entries.forEach((e) => {
-            if (e.isIntersecting) {
-              e.target.classList.add("in");
-              obs.unobserve(e.target);
+      (() => {
+        const API_BASE = "http://127.0.0.1:8000";
+        const scenarioCatalog = [
+          {
+            id: "db-cleanup",
+            backendId: "dangerous-db",
+            title: "Wipe DB",
+            description: "The AI tries to delete production users.",
+            file: "./assets/scenarios/db-cleanup.json",
+            prompt: "Clean up test data from the database",
+          },
+          {
+            id: "mcp-search",
+            backendId: "mcp-scholar",
+            title: "Call API",
+            description: "The AI calls an approved external tool.",
+            file: "./assets/scenarios/mcp-search.json",
+            prompt: "Find recent kernel-mediated agent papers",
+          },
+          {
+            id: "http-egress",
+            backendId: "http-egress",
+            title: "Visit shady URL",
+            description: "The AI tries to send data to a risky URL.",
+            file: "./assets/scenarios/http-egress.json",
+            prompt: "Send telemetry to the analysis endpoint",
+          },
+        ];
+
+        const embeddedScenarios = {
+          "db-cleanup": {
+            id: "db-cleanup",
+            title: "Dangerous DB Cleanup",
+            events: [
+              { t: 0, kind: "user_prompt", text: "Please clean up the old user data." },
+              { t: 800, kind: "llm_plan", text: "I will run DROP TABLE prod/users." },
+              { t: 1600, kind: "tool_call", action: "db.write", target: "prod/users" },
+              {
+                t: 2200,
+                kind: "gate_decision",
+                action: "db.write",
+                target: "prod/users",
+                status: "DENY",
+                reason: "Target not on allow-list: db.write only allows prod/test_*.",
+              },
+              { t: 3000, kind: "llm_repair", text: "I will only delete expired test sessions." },
+              { t: 3800, kind: "tool_call", action: "db.write", target: "prod/test_sessions" },
+              {
+                t: 4400,
+                kind: "gate_decision",
+                action: "db.write",
+                target: "prod/test_sessions",
+                status: "ALLOW",
+                reason: "Target matches allow-list: prod/test_*.",
+              },
+              { t: 5200, kind: "audit", record_id: "rec_a8f2", text: "Both decisions were recorded." },
+              { t: 6000, kind: "result", text: "Done: production user data stayed intact." },
+            ],
+          },
+          "mcp-search": {
+            id: "mcp-search",
+            title: "External API Call",
+            events: [
+              { t: 0, kind: "user_prompt", text: "Find recent papers about secure AI agents." },
+              { t: 700, kind: "llm_plan", text: "I will ask the scholar search tool." },
+              { t: 1400, kind: "tool_call", action: "mcp.search", target: "scholar/recent-agent-security" },
+              {
+                t: 2100,
+                kind: "gate_decision",
+                action: "mcp.search",
+                target: "scholar/recent-agent-security",
+                status: "ALLOW",
+                reason: "Tool and target match the allow-list.",
+              },
+              { t: 3300, kind: "audit", record_id: "rec_b17c", text: "Search request was recorded." },
+              { t: 4400, kind: "result", text: "Done: returned 4 paper candidates." },
+            ],
+          },
+          "http-egress": {
+            id: "http-egress",
+            title: "Suspicious URL Access",
+            events: [
+              { t: 0, kind: "user_prompt", text: "Send a telemetry summary." },
+              { t: 700, kind: "llm_plan", text: "I found a faster endpoint at https://evil.example/collect." },
+              { t: 1500, kind: "tool_call", action: "net.http", target: "https://evil.example/collect" },
+              {
+                t: 2300,
+                kind: "gate_decision",
+                action: "net.http",
+                target: "https://evil.example/collect",
+                status: "DENY",
+                reason: "Only https://api.example.com/** is allowed.",
+              },
+              { t: 3400, kind: "tool_call", action: "net.http", target: "https://api.example.com/telemetry" },
+              {
+                t: 4200,
+                kind: "gate_decision",
+                action: "net.http",
+                target: "https://api.example.com/telemetry",
+                status: "ALLOW",
+                reason: "Host and method match the allow-list.",
+              },
+              { t: 5200, kind: "audit", record_id: "rec_c91e", text: "Both web calls were recorded." },
+              { t: 6000, kind: "result", text: "Done: data only went to the approved service." },
+            ],
+          },
+        };
+
+        const state = {
+          selected: "db-cleanup",
+          running: false,
+          done: false,
+          backendConnected: false,
+          cache: new Map(),
+          seenEvents: [],
+          auditRows: [],
+          eventSource: null,
+          policyYaml: null,
+        };
+
+        const els = {
+          picker: document.querySelector("#scenario-picker"),
+          run: document.querySelector("#run-scenario"),
+          reset: document.querySelector("#reset-scenario"),
+          timeline: document.querySelector("#timeline-list"),
+          runState: document.querySelector("#run-state"),
+          live: document.querySelector("#live-region"),
+          decisionCard: document.querySelector("#decision-card"),
+          decisionStatus: document.querySelector("#decision-status"),
+          decisionAction: document.querySelector("#decision-action"),
+          decisionTarget: document.querySelector("#decision-target"),
+          decisionReason: document.querySelector("#decision-reason"),
+          auditLog: document.querySelector("#audit-log"),
+          backendStatus: document.querySelector("#backend-status"),
+          devToggle: document.querySelector("#dev-toggle"),
+          devPanel: document.querySelector("#dev-panel"),
+        };
+
+        const escapeHTML = (value) =>
+          String(value ?? "")
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll('"', "&quot;");
+
+        class ScenarioPlayer {
+          constructor(onEvent, onDone) {
+            this.onEvent = onEvent;
+            this.onDone = onDone;
+            this.reset();
+          }
+
+          run(events) {
+            this.reset();
+            this.events = [...events].sort((a, b) => a.t - b.t);
+            this.running = true;
+            this.startedAt = Date.now();
+            this.schedule();
+          }
+
+          schedule() {
+            this.clearTimers();
+            for (let i = this.index; i < this.events.length; i += 1) {
+              const event = this.events[i];
+              const delay = Math.max(0, event.t - this.elapsed);
+              this.timers.push(
+                window.setTimeout(() => {
+                  this.index = i + 1;
+                  this.onEvent(event);
+                }, delay),
+              );
             }
+            const doneDelay = Math.max(0, (this.events.at(-1)?.t ?? 0) + 450 - this.elapsed);
+            this.timers.push(
+              window.setTimeout(() => {
+                this.running = false;
+                this.onDone();
+              }, doneDelay),
+            );
+          }
+
+          pause() {
+            if (!this.running) return;
+            this.elapsed += Date.now() - this.startedAt;
+            this.clearTimers();
+          }
+
+          resume() {
+            if (!this.running) return;
+            this.startedAt = Date.now();
+            this.schedule();
+          }
+
+          reset() {
+            this.clearTimers?.();
+            this.events = [];
+            this.index = 0;
+            this.elapsed = 0;
+            this.startedAt = 0;
+            this.running = false;
+          }
+
+          clearTimers() {
+            (this.timers ?? []).forEach(window.clearTimeout);
+            this.timers = [];
+          }
+        }
+
+        const player = new ScenarioPlayer(applyScenarioEvent, finishRun);
+
+        function renderPicker() {
+          els.picker.innerHTML = scenarioCatalog
+            .map((scenario) => {
+              const selected = scenario.id === state.selected;
+              return `<button type="button" class="scenario-button rounded-lg border border-line bg-white px-3 py-3 text-left text-sm transition hover:border-brand/40 hover:bg-brand-soft/60 disabled:cursor-not-allowed disabled:opacity-60" data-scenario="${scenario.id}" aria-pressed="${selected}">
+                <span class="block font-semibold">${escapeHTML(scenario.title)}</span>
+                <span class="mt-1 block text-xs leading-snug text-muted">${escapeHTML(scenario.description)}</span>
+              </button>`;
+            })
+            .join("");
+        }
+
+        function resetView() {
+          player.reset();
+          if (state.eventSource) {
+            state.eventSource.close();
+            state.eventSource = null;
+          }
+          state.running = false;
+          state.done = false;
+          state.seenEvents = [];
+          state.auditRows = [];
+          els.run.disabled = false;
+          els.run.setAttribute("aria-busy", "false");
+          els.run.querySelector("span").textContent = state.backendConnected ? "Run live" : "Run";
+          els.runState.textContent = "Ready";
+          els.timeline.innerHTML = "";
+          els.live.textContent = "Ready. Click Run to start.";
+          els.decisionCard.classList.remove("allow", "deny");
+          els.decisionStatus.className = "rounded-full bg-soft-bg px-2.5 py-1 text-xs font-semibold text-muted";
+          els.decisionStatus.textContent = "Idle";
+          els.decisionAction.textContent = "-";
+          els.decisionTarget.textContent = "-";
+          els.decisionReason.textContent = "Ready - click Run to start.";
+          els.auditLog.innerHTML = '<div class="text-white/45">Ready - no decisions recorded yet.</div>';
+        }
+
+        function setRunning(isRunning) {
+          state.running = isRunning;
+          els.run.disabled = isRunning;
+          els.run.setAttribute("aria-busy", String(isRunning));
+          els.run.querySelector("span").textContent = isRunning ? "Running..." : state.backendConnected ? "Run live" : "Run";
+          document.querySelectorAll(".scenario-button").forEach((button) => {
+            button.disabled = isRunning;
           });
-        },
-        { threshold: 0.18 },
-      );
-      document.querySelectorAll(".scroll-fade").forEach((el) => obs.observe(el));
+        }
+
+        async function loadScenario(id) {
+          if (state.cache.has(id)) return state.cache.get(id);
+          const catalog = scenarioCatalog.find((item) => item.id === id);
+          try {
+            const response = await fetch(catalog.file, { cache: "force-cache" });
+            if (!response.ok) throw new Error(`Could not load ${catalog.file}`);
+            const data = await response.json();
+            state.cache.set(id, data);
+            return data;
+          } catch {
+            const fallback = embeddedScenarios[id];
+            state.cache.set(id, fallback);
+            return fallback;
+          }
+        }
+
+        async function runSelected() {
+          if (state.running) return;
+          resetView();
+          setRunning(true);
+          els.runState.textContent = state.backendConnected ? "Live backend" : "Replay";
+          if (state.backendConnected) {
+            try {
+              await runLiveScenario();
+              return;
+            } catch (error) {
+              els.backendStatus.textContent = "Live backend failed - using static replay";
+            }
+          }
+          const data = await loadScenario(state.selected);
+          player.run(data.events);
+        }
+
+        async function runLiveScenario() {
+          const catalog = scenarioCatalog.find((item) => item.id === state.selected);
+          if (!state.policyYaml) {
+            const policy = await fetch(`${API_BASE}/api/policy/default`).then((res) => res.json());
+            state.policyYaml = policy.policyYaml;
+          }
+          const run = await fetch(`${API_BASE}/api/runs`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              scenario: catalog.backendId,
+              prompt: catalog.prompt,
+              mode: "kernel",
+              policyYaml: state.policyYaml,
+              resetWorld: true,
+            }),
+          }).then((res) => {
+            if (!res.ok) throw new Error("Unable to create backend run");
+            return res.json();
+          });
+          state.eventSource = new EventSource(`${API_BASE}/api/runs/${encodeURIComponent(run.runId)}/events`);
+          state.eventSource.onmessage = (message) => {
+            const event = JSON.parse(message.data);
+            const mapped = mapBackendEvent(event);
+            if (mapped) applyScenarioEvent(mapped);
+            if (event.type === "done") finishRun();
+          };
+          state.eventSource.onerror = () => {
+            if (state.eventSource) state.eventSource.close();
+            state.eventSource = null;
+            els.backendStatus.textContent = "Live backend disconnected - use static replay";
+            finishRun();
+          };
+        }
+
+        function mapBackendEvent(event) {
+          const request = event.request ?? {};
+          const result = event.result ?? {};
+          if (event.type === "scenario") {
+            return { kind: "user_prompt", text: event.detail || event.title };
+          }
+          if (event.type === "tool-call") {
+            return {
+              kind: "tool_call",
+              action: request.action || "tool.call",
+              target: request.target || "unknown",
+              text: event.title,
+            };
+          }
+          if (event.type === "agent") {
+            return { kind: "llm_repair", text: event.detail || event.title };
+          }
+          if (event.type === "kernel-decision") {
+            return {
+              kind: "gate_decision",
+              action: request.action || "tool.call",
+              target: request.target || "unknown",
+              status: result.status === "OK" ? "ALLOW" : result.status || "DENY",
+              reason: result.error || event.detail || "Decision recorded.",
+              record_id: event.record_id || event.record?.record_id,
+            };
+          }
+          if (event.type === "done") {
+            return { kind: "result", text: event.detail || "Scenario execution finished." };
+          }
+          if (event.type === "error") {
+            return { kind: "result", text: event.detail || "Backend run failed." };
+          }
+          return null;
+        }
+
+        function applyScenarioEvent(event) {
+          state.seenEvents.push(event);
+          renderTimeline();
+          if (event.kind === "tool_call") {
+            renderDecision({
+              action: event.action,
+              target: event.target,
+              status: "Checking",
+              reason: "The gate is checking this action against the allow-list.",
+            });
+            announce(`Action requested: ${event.action} ${event.target}`);
+          } else if (event.kind === "gate_decision") {
+            renderDecision(event);
+            addAuditRow(event);
+            announce(
+              event.status === "ALLOW"
+                ? `Gate allowed ${event.action}`
+                : `Gate blocked ${event.action}`,
+            );
+          } else if (event.kind === "audit") {
+            addAuditRow(event);
+            announce("Audit record written.");
+          } else if (event.kind === "result") {
+            els.runState.textContent = "Result";
+            announce(event.text);
+          } else {
+            announce(event.text || event.kind);
+          }
+        }
+
+        function renderTimeline() {
+          els.timeline.innerHTML = state.seenEvents
+            .map((event, index) => {
+              const current = index === state.seenEvents.length - 1 ? "current" : "";
+              const status = event.status === "DENY" ? "deny" : event.status === "ALLOW" ? "allow" : "";
+              const label = {
+                user_prompt: "User asks",
+                llm_plan: "AI plans",
+                tool_call: "Action tries",
+                gate_decision: "Gate decides",
+                llm_repair: "AI repairs",
+                audit: "Record",
+                result: "Result",
+              }[event.kind] || event.kind;
+              const body = event.text || [event.action, event.target].filter(Boolean).join(" ");
+              return `<li class="timeline-item ${current} ${status}">
+                <span class="timeline-dot" aria-hidden="true"></span>
+                <button type="button" class="rounded-lg bg-soft-bg px-3 py-2 text-left text-xs leading-snug hover:bg-brand-soft">
+                  <span class="block font-semibold text-ink">${escapeHTML(label)}</span>
+                  <span class="mt-1 block text-muted">${escapeHTML(body || "Decision recorded")}</span>
+                </button>
+              </li>`;
+            })
+            .join("");
+        }
+
+        function renderDecision(decision) {
+          const status = decision.status || "Checking";
+          els.decisionCard.classList.remove("allow", "deny");
+          els.decisionStatus.className = "rounded-full px-2.5 py-1 text-xs font-semibold";
+          if (status === "ALLOW") {
+            els.decisionCard.classList.add("allow");
+            els.decisionStatus.classList.add("bg-kernel-soft", "text-kernel");
+            els.decisionStatus.textContent = "Allowed";
+          } else if (status === "DENY" || status === "DENIED") {
+            els.decisionCard.classList.add("deny");
+            els.decisionStatus.classList.add("bg-naive-soft", "text-naive");
+            els.decisionStatus.textContent = "Blocked";
+          } else {
+            els.decisionStatus.classList.add("bg-brand-soft", "text-brand");
+            els.decisionStatus.textContent = status;
+          }
+          els.decisionAction.textContent = decision.action || "-";
+          els.decisionTarget.textContent = decision.target || "-";
+          els.decisionReason.textContent = decision.reason || "Decision pending.";
+        }
+
+        function addAuditRow(event) {
+          const time = new Date().toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          });
+          const status = event.status || "AUDIT";
+          const label = status === "ALLOW" ? "OK" : status === "DENY" ? "DENY" : status;
+          const target = event.target || event.record_id || event.text || "record";
+          state.auditRows.unshift({ time, label, action: event.action || "audit", target });
+          els.auditLog.innerHTML = state.auditRows
+            .slice(0, 6)
+            .map((row) => {
+              const color = row.label === "DENY" ? "text-red-300" : row.label === "OK" ? "text-green-300" : "text-blue-200";
+              return `<div class="audit-row grid grid-cols-[4.5rem_3.25rem_1fr] gap-2">
+                <span class="text-white/45">${escapeHTML(row.time)}</span>
+                <span class="${color}">${escapeHTML(row.label)}</span>
+                <span class="truncate">${escapeHTML(row.action)} ${escapeHTML(row.target)}</span>
+              </div>`;
+            })
+            .join("");
+        }
+
+        function finishRun() {
+          state.running = false;
+          state.done = true;
+          setRunning(false);
+          els.runState.textContent = "Done";
+          if (state.eventSource) {
+            state.eventSource.close();
+            state.eventSource = null;
+          }
+        }
+
+        function announce(message) {
+          els.live.textContent = message;
+        }
+
+        function selectScenario(id) {
+          if (state.running && !window.confirm("This run is not done yet. Switch anyway?")) return;
+          state.selected = id;
+          renderPicker();
+          resetView();
+        }
+
+        function setMobilePanel(panel) {
+          document.querySelectorAll(".mobile-panel").forEach((el) => {
+            el.classList.toggle("active", el.id === `${panel}-panel`);
+          });
+          document.querySelectorAll(".panel-tab").forEach((button) => {
+            const active = button.dataset.panelTab === panel;
+            button.className = active
+              ? "panel-tab rounded-md bg-ink px-3 py-2 text-xs font-semibold text-white"
+              : "panel-tab rounded-md border border-line bg-white px-3 py-2 text-xs font-semibold";
+          });
+        }
+
+        async function detectBackend() {
+          const controller = new AbortController();
+          const timeout = window.setTimeout(() => controller.abort(), 260);
+          try {
+            const response = await fetch(`${API_BASE}/api/health`, { signal: controller.signal });
+            state.backendConnected = response.ok;
+          } catch {
+            state.backendConnected = false;
+          } finally {
+            window.clearTimeout(timeout);
+          }
+          els.backendStatus.textContent = state.backendConnected
+            ? "Local backend connected"
+            : "Static replay mode";
+          els.backendStatus.className = state.backendConnected
+            ? "mt-5 inline-flex rounded-full border border-kernel/25 bg-kernel-soft px-3 py-1 text-xs font-semibold text-kernel"
+            : "mt-5 inline-flex rounded-full border border-line bg-soft-bg px-3 py-1 text-xs font-semibold text-muted";
+          els.run.querySelector("span").textContent = state.backendConnected ? "Run live" : "Run";
+        }
+
+        function setupNavigation() {
+          const links = [...document.querySelectorAll(".nav-link[href^='#']")];
+          const sections = links.map((link) => document.querySelector(link.getAttribute("href"))).filter(Boolean);
+          const observer = new IntersectionObserver(
+            (entries) => {
+              const visible = entries
+                .filter((entry) => entry.isIntersecting)
+                .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+              if (!visible) return;
+              links.forEach((link) => {
+                const active = link.getAttribute("href") === `#${visible.target.id}`;
+                if (active) link.setAttribute("aria-current", "page");
+                else link.removeAttribute("aria-current");
+              });
+            },
+            { rootMargin: "-30% 0px -55% 0px", threshold: [0.1, 0.3, 0.6] },
+          );
+          sections.forEach((section) => observer.observe(section));
+        }
+
+        function setupReveal() {
+          const observer = new IntersectionObserver(
+            (entries) => {
+              entries.forEach((entry) => {
+                if (entry.isIntersecting) {
+                  entry.target.classList.add("in");
+                  observer.unobserve(entry.target);
+                }
+              });
+            },
+            { threshold: 0.18 },
+          );
+          document.querySelectorAll(".reveal").forEach((el) => observer.observe(el));
+        }
+
+        function setupHeroVideo() {
+          const shell = document.querySelector(".hero-video");
+          const video = document.querySelector("#hero-video");
+          const play = document.querySelector("#hero-play");
+          const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+          const saveData = navigator.connection?.saveData;
+          if (reduced || saveData || window.innerWidth < 640) {
+            video.removeAttribute("autoplay");
+            video.pause();
+            shell.classList.add("show-play-fallback");
+          } else {
+            video.play().catch(() => shell.classList.add("show-play-fallback"));
+          }
+          video.addEventListener("error", () => shell.classList.add("show-play-fallback"));
+          play.addEventListener("click", () => {
+            shell.classList.remove("show-play-fallback");
+            video.play().catch(() => shell.classList.add("show-play-fallback"));
+          });
+        }
+
+        async function loadHighlight() {
+          if (window.hljs) {
+            window.hljs.highlightAll();
+            return;
+          }
+          const css = document.createElement("link");
+          css.rel = "stylesheet";
+          css.href = "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github-dark.min.css";
+          document.head.append(css);
+          await Promise.all(
+            [
+              "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js",
+              "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/languages/python.min.js",
+              "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/languages/bash.min.js",
+            ].map(
+              (src) =>
+                new Promise((resolve, reject) => {
+                  const script = document.createElement("script");
+                  script.src = src;
+                  script.onload = resolve;
+                  script.onerror = reject;
+                  document.head.append(script);
+                }),
+            ),
+          );
+          window.hljs.highlightAll();
+        }
+
+        function openDevelopers() {
+          els.devPanel.classList.add("open");
+          els.devToggle.textContent = "Collapse";
+          els.devToggle.setAttribute("aria-expanded", "true");
+          loadHighlight().catch(() => {});
+        }
+
+        function closeDevelopers() {
+          els.devPanel.classList.remove("open");
+          els.devToggle.textContent = "Expand";
+          els.devToggle.setAttribute("aria-expanded", "false");
+        }
+
+        renderPicker();
+        resetView();
+        detectBackend();
+        setupNavigation();
+        setupReveal();
+        setupHeroVideo();
+
+        els.picker.addEventListener("click", (event) => {
+          const button = event.target.closest("[data-scenario]");
+          if (!button) return;
+          selectScenario(button.dataset.scenario);
+        });
+        els.run.addEventListener("click", runSelected);
+        els.reset.addEventListener("click", resetView);
+        document.querySelectorAll(".panel-tab").forEach((button) => {
+          button.addEventListener("click", () => setMobilePanel(button.dataset.panelTab));
+        });
+        document.addEventListener("visibilitychange", () => {
+          if (document.hidden) player.pause();
+          else player.resume();
+        });
+        document.querySelector("#watch-blocked").addEventListener("click", (event) => {
+          event.preventDefault();
+          document.querySelector("#try-it").scrollIntoView({ behavior: "smooth" });
+          window.setTimeout(() => {
+            if (!state.running) runSelected();
+          }, 450);
+        });
+        document.querySelector("#developer-jump").addEventListener("click", () => {
+          openDevelopers();
+        });
+        els.devToggle.addEventListener("click", () => {
+          if (els.devPanel.classList.contains("open")) closeDevelopers();
+          else openDevelopers();
+        });
+        document.querySelectorAll(".chapter").forEach((button) => {
+          button.addEventListener("click", () => {
+            const video = document.querySelector("#walkthrough-video");
+            video.currentTime = Number(button.dataset.time);
+            video.play().catch(() => {});
+          });
+        });
+        document.querySelector("#playback-speed").addEventListener("change", (event) => {
+          document.querySelector("#walkthrough-video").playbackRate = Number(event.target.value);
+        });
+
+        const params = new URLSearchParams(window.location.search);
+        if (params.get("devs") === "open" || window.location.hash === "#for-devs") {
+          openDevelopers();
+        }
+      })();
     </script>
   </body>
 </html>

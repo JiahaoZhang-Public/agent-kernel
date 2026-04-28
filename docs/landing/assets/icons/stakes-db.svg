@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" role="img" aria-labelledby="title">
+  <title id="title">Database deletion warning</title>
+  <g fill="none" stroke="#fca5a5" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <ellipse cx="48" cy="22" rx="27" ry="10"/>
+    <path d="M21 22v34c0 6 12 11 27 11s27-5 27-11V22"/>
+    <path d="M21 39c0 6 12 11 27 11s27-5 27-11"/>
+    <path d="M34 74l28-28"/>
+    <path d="M62 74L34 46"/>
+  </g>
+</svg>

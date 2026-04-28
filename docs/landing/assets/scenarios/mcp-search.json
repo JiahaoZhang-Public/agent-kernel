@@ -1,0 +1,46 @@
+{
+  "id": "mcp-search",
+  "backendId": "mcp-scholar",
+  "title": "External API Call",
+  "description": "The AI wants to use a universal tool interface, but the gate narrows where it can go.",
+  "events": [
+    {
+      "t": 0,
+      "kind": "user_prompt",
+      "text": "Find recent papers about secure AI agents."
+    },
+    {
+      "t": 700,
+      "kind": "llm_plan",
+      "text": "I will ask the scholar search tool for new papers."
+    },
+    {
+      "t": 1400,
+      "kind": "tool_call",
+      "action": "mcp.search",
+      "target": "scholar/recent-agent-security",
+      "args": {
+        "query": "secure AI agents kernel gate audit log"
+      }
+    },
+    {
+      "t": 2100,
+      "kind": "gate_decision",
+      "action": "mcp.search",
+      "target": "scholar/recent-agent-security",
+      "status": "ALLOW",
+      "reason": "Tool and target match the allow-list."
+    },
+    {
+      "t": 3300,
+      "kind": "audit",
+      "record_id": "rec_b17c",
+      "text": "Search request and result summary recorded."
+    },
+    {
+      "t": 4400,
+      "kind": "result",
+      "text": "Done: returned 4 paper candidates without exposing private data."
+    }
+  ]
+}

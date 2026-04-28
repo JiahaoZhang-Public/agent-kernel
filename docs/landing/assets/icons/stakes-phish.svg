@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" role="img" aria-labelledby="title">
+  <title id="title">Phishing page warning</title>
+  <g fill="none" stroke="#fca5a5" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="14" y="20" width="68" height="50" rx="8"/>
+    <path d="M14 34h68"/>
+    <path d="M25 28h.1M35 28h.1M45 28h.1"/>
+    <path d="M34 52h28"/>
+    <path d="M48 44v18"/>
+    <path d="M31 82h34"/>
+    <path d="M48 70v12"/>
+    <path d="M67 46l10-10 5 17-8-3-4 8z"/>
+  </g>
+</svg>

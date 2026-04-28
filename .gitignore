@@ -2,6 +2,8 @@ CLAUDE.md
 .claude/
 .superpowers/
 docs/superpowers/
+AGENTS.md
+docs/landing/REDESIGN_SPEC.md
 
 # Python
 __pycache__/
